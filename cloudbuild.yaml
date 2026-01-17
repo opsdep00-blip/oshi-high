@@ -1,12 +1,18 @@
 steps:
-  # 1. Dockerイメージをビルドする
-  - name: 'asia-northeast1-docker.pkg.dev/ai-sns-app/oshi-high/image'
-    args: ['build', '-t', 'gcr.io/ai-sns-app/oshi-high', '.']
-
-  # 2. ビルドしたイメージを保存する
+  # 1. ビルド
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/ai-sns-app/oshi-high']
+    args: [
+      'build', 
+      '-t', 'asia-northeast1-docker.pkg.dev/ai-sns-app/oshi-high/oshi-app:latest', 
+      '.'
+    ]
 
-# ここが重要！エラーの原因だったログ設定をここに書く
+  # 2. プッシュ（ここがエラーの箇所）
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [
+      'push', 
+      'asia-northeast1-docker.pkg.dev/ai-sns-app/oshi-high/oshi-app:latest'
+    ]
+
 options:
   logging: CLOUD_LOGGING_ONLY
