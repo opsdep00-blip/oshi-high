@@ -1,0 +1,12 @@
+steps:
+  # 1. Dockerイメージをビルドする
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/ai-sns-app/oshi-high', '.']
+
+  # 2. ビルドしたイメージを保存する
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/ai-sns-app/oshi-high']
+
+# ここが重要！エラーの原因だったログ設定をここに書く
+options:
+  logging: CLOUD_LOGGING_ONLY
