@@ -1,6 +1,6 @@
 steps:
   # 1. Dockerイメージをビルドする
-  - name: 'gcr.io/cloud-builders/docker'
+  - name: 'asia-northeast1-docker.pkg.dev/ai-sns-app/oshi-high/image'
     args: ['build', '-t', 'gcr.io/ai-sns-app/oshi-high', '.']
 
   # 2. ビルドしたイメージを保存する
