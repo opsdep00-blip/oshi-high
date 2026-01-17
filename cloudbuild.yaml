@@ -1,14 +1,31 @@
 steps:
+  # 1. ビルドして保存 (Artifact Registryへ直接送る)
   - name: 'gcr.io/cloud-builders/docker'
     args: [
       'build', 
       '-t', 'asia-northeast1-docker.pkg.dev/oshi-high/oshi-high/image:latest', 
       '.'
     ]
+
+  # 2. 倉庫にプッシュ
   - name: 'gcr.io/cloud-builders/docker'
     args: [
       'push', 
       'asia-northeast1-docker.pkg.dev/oshi-high/oshi-high/image:latest'
     ]
+
+  # 3. Cloud Runへデプロイ (本来やりたかった最終工程)
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'oshi-service'
+      - '--image'
+      - 'asia-northeast1-docker.pkg.dev/oshi-high/oshi-high/image:latest'
+      - '--region'
+      - 'asia-northeast1'
+      - '--allow-unauthenticated'
+
 options:
   logging: CLOUD_LOGGING_ONLY
