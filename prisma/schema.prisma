@@ -1,0 +1,173 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===== ユーザー（ファン・推し支援者）=====
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  email     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Activity ポイント（カレンダー編集権限などの判定に使用）
+  activityPoints Int @default(0)
+
+  // この user が支援している推し（多対多）
+  supportedIdols Idol[] @relation("UserSupports")
+
+  // この user が作成・投稿したサポートログ
+  supportLogs SupportLog[]
+
+  // カレンダー編集権限
+  calendarEditPermissions CalendarEditPermission[]
+}
+
+// ===== 推し（アイドル・クリエイター）=====
+model Idol {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  bio       String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // この推しを支援している Fan 群
+  supporters User[] @relation("UserSupports")
+
+  // 本人がクレーム済みフラグ（SNS OAuth 認証済み）
+  isClaimed Boolean @default(false)
+
+  // SNS リンク情報（複数プロバイダーに対応）
+  snsLinks SnsSocialLink[]
+
+  // この推しが受け取ったサポートログ
+  receivedSupports SupportLog[]
+
+  // この推し用のファンカレンダー
+  fanCalendar FanCalendar?
+
+  // 累積 Activity（全ファンからの支援を記録）
+  totalActivityReceived Int @default(0)
+}
+
+// ===== ドット絵（32x32 ピクセルアート）=====
+model PixelArt {
+  id        String   @id @default(cuid())
+  name      String
+  creator   String   // スポンサー名など
+
+  // 32x32 = 1024 ピクセル分のカラーインデックス JSON
+  // 形式例: { "palette": [...], "indices": [...] }
+  // 軽量化のためカラーパレットと参照インデックス方式
+  pixelDataJson String
+
+  // このドット絵が使用されたサポートログ
+  usedInSupportLogs SupportLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ===== サポートログ（支援履歴）=====
+// 「誰がどの推しを、どのドット絵（広告主提供）で応援したか」の記録
+model SupportLog {
+  id        String   @id @default(cuid())
+
+  // 支援したファン
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 応援対象の推し
+  idolId    String
+  idol      Idol     @relation(fields: [idolId], references: [id], onDelete: Cascade)
+
+  // 使用したドット絵（広告素材）
+  pixelArtId String
+  pixelArt  PixelArt @relation(fields: [pixelArtId], references: [id], onDelete: SetNull)
+
+  // このサポートで付与される Activity ポイント
+  activityPointsAwarded Int @default(1)
+
+  // サポート金額（将来の収益化用）
+  amount    Float?
+
+  // 支援の種別（"yell", "purchase" など）
+  supportType String @default("yell")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([idolId])
+  @@index([pixelArtId])
+}
+
+// ===== ファンカレンダー（推しごとに1つ）=====
+model FanCalendar {
+  id        String   @id @default(cuid())
+  idolId    String   @unique
+  idol      Idol     @relation(fields: [idolId], references: [id], onDelete: Cascade)
+
+  // カレンダー詳細（JSON形式で柔軟に拡張可）
+  // 例: { "events": [...], "theme": "...", "pinnedMessages": [...] }
+  calendarDataJson String @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ===== カレンダー編集権限（Activity ベース）=====
+// Activity が一定以上のファンに編集権限を付与
+model CalendarEditPermission {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  idolId    String   // 対象推し（FK は持たない）
+
+  // 権限の活性状態
+  isActive  Boolean  @default(true)
+
+  // Activity が一定値以上かどうかの判定閾値
+  requiredActivityPoints Int @default(100)
+
+  // 権限付与日時
+  grantedAt DateTime @default(now())
+  revokedAt DateTime?
+
+  @@unique([userId, idolId])
+  @@index([userId])
+}
+
+// ===== SNS ソーシャルリンク（推しが本人確認用）=====
+model SnsSocialLink {
+  id        String   @id @default(cuid())
+  idolId    String
+  idol      Idol     @relation(fields: [idolId], references: [id], onDelete: Cascade)
+
+  // SNS プロバイダー（"twitter", "instagram", "tiktok" など）
+  provider  String
+
+  // SNS 上のユーザーID
+  providerUserId String
+
+  // リンク確認済みフラグ
+  isVerified Boolean @default(false)
+
+  // OAuth トークン（セキュア保存時は暗号化推奨）
+  accessToken String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([idolId, provider, providerUserId])
+  @@index([idolId])
+}

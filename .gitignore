@@ -4,6 +4,7 @@
 /node_modules
 /.pnp
 .pnp.js
+.yarn/install-state.gz
 
 # testing
 /coverage
@@ -27,6 +28,14 @@ yarn-error.log*
 # local env files
 .env*.local
 .env
+.env.production
+
+# GCP service account keys and credentials
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!.gcloudignore
 
 # vercel
 .vercel
@@ -34,3 +43,21 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.dockerignore
+
+# Prisma
+prisma/*.db
+prisma/*.db-journal
