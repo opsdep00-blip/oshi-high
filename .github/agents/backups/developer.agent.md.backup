@@ -7,7 +7,7 @@ approved-by: ['@teamlead','@devops']
 communication-language: '日本語'
 handoffs:
   - label: Run Implementation
-    agent: codex
+    agent: agent
     prompt: "#apply_patch で小さな変更を作成し、テストと PR テンプレを含めて提出してください。"
     showContinueOn: false
     send: true
