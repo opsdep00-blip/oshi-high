@@ -8,14 +8,14 @@ resource "google_sql_database_instance" "staging" {
   settings {
     tier = var.db_tier
     
-    database_flags {
-      name  = "cloudsql_iam_authentication"
-      value = "on"
-    }
+    # database_flags {
+    #   name  = "cloudsql_iam_authentication"
+    #   value = "on"
+    # }
 
     ip_configuration {
-      require_ssl        = true
-      enable_private_ip  = false
+      ipv4_enabled   = true
+      ssl_mode       = "ENCRYPTED_ONLY"
       authorized_networks {
         value = "0.0.0.0/0"
         name  = "allow_all_staging"
@@ -68,7 +68,6 @@ resource "google_storage_bucket" "assets" {
     }
     condition {
       num_newer_versions = 3
-      is_live            = false
     }
   }
 }

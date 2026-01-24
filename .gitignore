@@ -62,6 +62,13 @@ Thumbs.db
 prisma/*.db
 prisma/*.db-journal
 
+# Terraform (staging/prod environments)
+infra/*/terraform.tfvars
+infra/*/.terraform/
+infra/*/*.tfstate*
+infra/*/terraform-*-key.json
+infra/*/*.json
+
 # GitHub（エージェント定義は管理対象）
 .github/backups/
 .github/workflows/.secrets
