@@ -10,164 +10,199 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ===== ユーザー（ファン・推し支援者）=====
+// ===== Auth.js (NextAuth) 標準テーブル =====
+
 model User {
-  id        String   @id @default(cuid())
-  username  String   @unique
-  email     String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
 
-  // Activity ポイント（カレンダー編集権限などの判定に使用）
-  activityPoints Int @default(0)
+  // ファン向け拡張フィールド
+  phoneHash     String?   @unique  // SHA-256(phone + salt)
+  phoneSalt     String?             // ユーザーごとのユニークなソルト
+  supportingIdolId String?  // 現在支援中の推し (制約: 1つの電話番号 → 1つの推し)
+  
+  // ドット絵パレット (最大4色)
+  selectedColors String[] @default([])
 
-  // この user が支援している推し（多対多）
-  supportedIdols Idol[] @relation("UserSupports")
+  // メタデータ
+  role          Role      @default(FAN)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  // この user が作成・投稿したサポートログ
-  supportLogs SupportLog[]
+  // リレーション
+  accounts      Account[]
+  sessions      Session[]
+  transactions  SupportTransaction[]
+  supportingIdol Idol?     @relation("CurrentSupporter", fields: [supportingIdolId], references: [id], onDelete: SetNull)
 
-  // カレンダー編集権限
-  calendarEditPermissions CalendarEditPermission[]
+  @@index([phoneHash])
+  @@index([supportingIdolId])
 }
 
-// ===== 推し（アイドル・クリエイター）=====
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String  // "oauth" or "credentials"
+  provider           String  // "twitter", "x", "sms", etc.
+  providerAccountId  String
+  refresh_token      String?  @db.Text
+  access_token       String?  @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?  @db.Text
+  session_state      String?
+
+  // SNS認証用: プロフィール情報キャッシュ
+  snsProfileId       String?  // X/Twitter の user_id
+  snsHandle          String?  // X/Twitter の @handle
+  snsVerifiedAt      DateTime?
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+  type       String   // "sms" or "email"
+  createdAt  DateTime @default(now())
+
+  @@unique([identifier, token])
+  @@index([identifier])
+}
+
+// ===== ドメインテーブル =====
+
 model Idol {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  bio       String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String   @id @default(cuid())
+  name          String   @unique
+  
+  // SNS認証用: 推し本人のSNS ID
+  snsLink       String?  @unique // X/Twitter の user_id (Official Claim用)
+  snsHandle     String?  // @handle or URL
+  snsVerifiedAt DateTime?
 
-  // この推しを支援している Fan 群
-  supporters User[] @relation("UserSupports")
+  // 状態管理
+  claimedBy     String?  // User.id (Official Owner)
+  claimedAt     DateTime?
 
-  // 本人がクレーム済みフラグ（SNS OAuth 認証済み）
-  isClaimed Boolean @default(false)
+  description   String?  @db.Text
+  profileImage  String?  // pixel art JSON or URL
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  // SNS リンク情報（複数プロバイダーに対応）
-  snsLinks SnsSocialLink[]
+  // リレーション
+  supporters    User[]   @relation("CurrentSupporter")
+  transactions  SupportTransaction[]
 
-  // この推しが受け取ったサポートログ
-  receivedSupports SupportLog[]
-
-  // この推し用のファンカレンダー
-  fanCalendar FanCalendar?
-
-  // 累積 Activity（全ファンからの支援を記録）
-  totalActivityReceived Int @default(0)
+  @@index([snsLink])
+  @@index([claimedBy])
 }
 
-// ===== ドット絵（32x32 ピクセルアート）=====
-model PixelArt {
-  id        String   @id @default(cuid())
-  name      String
-  creator   String   // スポンサー名など
+model Ad {
+  id            String   @id @default(cuid())
+  title         String
+  description   String?  @db.Text
+  sponsorName   String?
+  
+  // 支援金配分
+  idolSharePercent Int    @default(70)  // 推しへの配分比率 (%)
+  platformFeePercent Int  @default(30)  // プラットフォーム手数料 (%)
+  
+  status        String   @default("active") // "active", "paused", "archived"
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  // 32x32 = 1024 ピクセル分のカラーインデックス JSON
-  // 形式例: { "palette": [...], "indices": [...] }
-  // 軽量化のためカラーパレットと参照インデックス方式
-  pixelDataJson String
+  // リレーション
+  yellMaterials YellMaterial[]
 
-  // このドット絵が使用されたサポートログ
-  usedInSupportLogs SupportLog[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  @@index([status])
 }
 
-// ===== サポートログ（支援履歴）=====
-// 「誰がどの推しを、どのドット絵（広告主提供）で応援したか」の記録
-model SupportLog {
-  id        String   @id @default(cuid())
+model YellMaterial {
+  id            String   @id @default(cuid())
+  adId          String
+  
+  // ドット絵データ
+  pixelData     String   @db.Text // JSON: { palette: string[], frames: number[][][] }
+  name          String   // 素材の名前 (例: "クマ耳ver", "ハート")
+  width         Int      @default(32)
+  height        Int      @default(32)
+  
+  // メタデータ
+  displayOrder  Int      @default(0)
+  isActive      Boolean  @default(true)
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  // 支援したファン
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // リレーション
+  ad            Ad       @relation(fields: [adId], references: [id], onDelete: Cascade)
+  transactions  SupportTransaction[]
 
-  // 応援対象の推し
-  idolId    String
-  idol      Idol     @relation(fields: [idolId], references: [id], onDelete: Cascade)
+  @@index([adId])
+  @@index([isActive])
+}
 
-  // 使用したドット絵（広告素材）
-  pixelArtId String
-  pixelArt  PixelArt @relation(fields: [pixelArtId], references: [id], onDelete: SetNull)
 
-  // このサポートで付与される Activity ポイント
-  activityPointsAwarded Int @default(1)
+model SupportTransaction {
+  id            String   @id @default(cuid())
+  userId        String
+  idolId        String
+  yellMaterialId String?  // 使用した YellMaterial
+  
+  // 金額・ポイント
+  amount        Int      // 支援金額 (¥)
+  activityPoints Int      // 付与されたActivity
+  
+  // フロー
+  transactionType String  // "yell_material", "direct_support", etc.
+  status        String   @default("completed") // "pending", "completed", "failed"
+  
+  // 追跡用（生の電話番号は保存しない！）
+  phoneHash     String?  // 重複支援チェック用
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  // サポート金額（将来の収益化用）
-  amount    Float?
-
-  // 支援の種別（"yell", "purchase" など）
-  supportType String @default("yell")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  idol Idol @relation(fields: [idolId], references: [id], onDelete: Restrict)
+  yellMaterial YellMaterial? @relation(fields: [yellMaterialId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([idolId])
-  @@index([pixelArtId])
+  @@index([yellMaterialId])
+  @@index([phoneHash])
 }
 
-// ===== ファンカレンダー（推しごとに1つ）=====
-model FanCalendar {
-  id        String   @id @default(cuid())
-  idolId    String   @unique
-  idol      Idol     @relation(fields: [idolId], references: [id], onDelete: Cascade)
+// ===== Enum =====
 
-  // カレンダー詳細（JSON形式で柔軟に拡張可）
-  // 例: { "events": [...], "theme": "...", "pinnedMessages": [...] }
-  calendarDataJson String @default("{}")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-// ===== カレンダー編集権限（Activity ベース）=====
-// Activity が一定以上のファンに編集権限を付与
-model CalendarEditPermission {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  idolId    String   // 対象推し（FK は持たない）
-
-  // 権限の活性状態
-  isActive  Boolean  @default(true)
-
-  // Activity が一定値以上かどうかの判定閾値
-  requiredActivityPoints Int @default(100)
-
-  // 権限付与日時
-  grantedAt DateTime @default(now())
-  revokedAt DateTime?
-
-  @@unique([userId, idolId])
-  @@index([userId])
-}
-
-// ===== SNS ソーシャルリンク（推しが本人確認用）=====
-model SnsSocialLink {
-  id        String   @id @default(cuid())
-  idolId    String
-  idol      Idol     @relation(fields: [idolId], references: [id], onDelete: Cascade)
-
-  // SNS プロバイダー（"twitter", "instagram", "tiktok" など）
-  provider  String
-
-  // SNS 上のユーザーID
-  providerUserId String
-
-  // リンク確認済みフラグ
-  isVerified Boolean @default(false)
-
-  // OAuth トークン（セキュア保存時は暗号化推奨）
-  accessToken String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([idolId, provider, providerUserId])
-  @@index([idolId])
+enum Role {
+  FAN
+  IDOL
+  ADMIN
 }

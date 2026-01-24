@@ -3,7 +3,7 @@ steps:
   - name: 'gcr.io/cloud-builders/docker'
     args: [
       'build', 
-      '-t', 'asia-northeast1-docker.pkg.dev/oshi-high/oshi-high/image:latest', 
+      '-t', 'asia-northeast1-docker.pkg.dev/oshi-high/oshi-high/image:$SHORT_SHA', 
       '.'
     ]
 
@@ -11,7 +11,7 @@ steps:
   - name: 'gcr.io/cloud-builders/docker'
     args: [
       'push', 
-      'asia-northeast1-docker.pkg.dev/oshi-high/oshi-high/image:latest'
+      'asia-northeast1-docker.pkg.dev/oshi-high/oshi-high/image:$SHORT_SHA'
     ]
 
   # 3. Cloud Runへデプロイ (本来やりたかった最終工程)
@@ -22,7 +22,7 @@ steps:
       - 'deploy'
       - 'oshi-service'
       - '--image'
-      - 'asia-northeast1-docker.pkg.dev/oshi-high/oshi-high/image:latest'
+      - 'asia-northeast1-docker.pkg.dev/oshi-high/oshi-high/image:$SHORT_SHA'
       - '--region'
       - 'asia-northeast1'
       - '--allow-unauthenticated'

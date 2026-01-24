@@ -1,0 +1,27 @@
+output "cloud_sql_instance_name" {
+  value       = google_sql_database_instance.staging.name
+  description = "Cloud SQL instance name"
+}
+
+output "cloud_sql_connection_name" {
+  value       = google_sql_database_instance.staging.connection_name
+  description = "Cloud SQL connection string for Cloud Run"
+}
+
+output "cloud_sql_public_ip" {
+  value       = google_sql_database_instance.staging.public_ip_address
+  description = "Cloud SQL public IP"
+}
+
+output "db_user" {
+  value = google_sql_user.oshi_user.name
+}
+
+output "gcs_bucket_name" {
+  value       = google_storage_bucket.assets.name
+  description = "GCS bucket for assets"
+}
+
+output "gcs_bucket_url" {
+  value = "gs://${google_storage_bucket.assets.name}"
+}

@@ -4,6 +4,8 @@ FROM node:20-alpine AS builder
 RUN apk add --no-cache libc6-compat openssl
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
+ARG DATABASE_URL="postgresql://user:pass@localhost:5432/db"
+ENV DATABASE_URL=${DATABASE_URL}
 
 COPY package*.json ./
 # Prisma スキーマを先にコピーして generate する
@@ -21,12 +23,13 @@ FROM node:20-alpine AS runner
 RUN apk add --no-cache openssl
 WORKDIR /app
 ENV NODE_ENV=production
+ARG DATABASE_URL="postgresql://user:pass@localhost:5432/db"
+ENV DATABASE_URL=${DATABASE_URL}
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=8080
 ENV HOSTNAME=0.0.0.0
 
 USER node
-
 COPY --chown=node:node --from=builder /app/.next/standalone ./
 COPY --chown=node:node --from=builder /app/.next/static ./.next/static
 COPY --chown=node:node --from=builder /app/public ./public
