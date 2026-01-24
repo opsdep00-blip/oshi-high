@@ -62,4 +62,6 @@ Thumbs.db
 prisma/*.db
 prisma/*.db-journal
 
-.github/
+# GitHub（エージェント定義は管理対象）
+.github/backups/
+.github/workflows/.secrets
