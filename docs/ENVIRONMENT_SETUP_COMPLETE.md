@@ -53,12 +53,12 @@ terraform apply
 - **手動デプロイ**: `terraform-prod-apply.yml`
 
 #### アプリケーション デプロイパイプライン
-- **Staging 自動デプロイ**: `app-deploy-staging.yml`
-  - トリガー: `main` ブランチへの push
+- **Cloud Run 自動デプロイ**: `cloud-run.yml` ✅ **既に実装済み**
+  - トリガー: `main` ブランチへの push または `workflow_dispatch` (手動)
   - 自動: Docker ビルド → Artifact Registry → Cloud Run
-- **Production 手動デプロイ**: `app-deploy-prod.yml`
-  - トリガー: `workflow_dispatch` (GitHub Actions UI から手動実行)
-  - 環境保護: Production environment の手動承認
+  - Service: `oshi-service` (本番)
+- **Cloud Build 統合**: `cloudbuild.yaml` ✅ **既に実装済み**
+  - GCP Cloud Build でも自動ビルド・デプロイ可能
 
 ---
 
@@ -107,89 +107,40 @@ Invoke-WebRequest -Uri "http://localhost:3000/api/idols" -Method POST -ContentTy
 
 ## 🚀 次のステップ（Developer の役割）
 
-### Phase 1: GitHub Secrets 設定 ⏳
+### Phase 1: GitHub Secrets 設定（Secrets の確認） ⏳
+既存の `cloud-run.yml` で必要な Secrets:
+
 ```bash
-# 1. Database URL 取得
-gcloud sql instances describe oshi-high-staging-db --project=oshi-high --format='get(connectionName)'
-# 出力: oshi-high:asia-northeast1:oshi-high-staging-db
+# 既に登録されているか確認
+gh secret list
 
-# 2. パスワード取得
-gcloud secrets versions access latest --secret="staging-db-password" --project=oshi-high
-
-# 3. GitHub Secrets 登録
-gh secret set STAGING_DATABASE_URL --body "postgresql://oshi_user:PASSWORD@/oshi_local?host=/cloudsql/oshi-high:asia-northeast1:oshi-high-staging-db"
-gh secret set STAGING_NEXTAUTH_URL --body "http://localhost:3000"
-gh secret set PROD_DATABASE_URL --body "postgresql://oshi_user:PASSWORD@/oshi_local?host=/cloudsql/oshi-high:asia-northeast1:oshi-high-prod-db"
-gh secret set PROD_NEXTAUTH_URL --body "https://oshi-high.jp"
-gh secret set NEXTAUTH_SECRET --body "$(openssl rand -base64 32)"
-
-# ドキュメント: docs/GITHUB_SECRETS_SETUP.md
+# 必要な Secrets（未設定の場合）
+gh secret set GCP_SA_KEY_JSON --body "$(cat path/to/service-account.json)"
+gh secret set GCP_PROJECT_ID --body "oshi-high"
+gh secret set GCP_ARTIFACT_REPO --body "docker-repo"
+gh secret set GCP_SERVICE_NAME --body "oshi-service"
 ```
 
-### Phase 2: Artifact Registry セットアップ
+### Phase 2: 自動デプロイテスト
 ```bash
-# Artifact Registry を有効化
-gcloud services enable artifactregistry.googleapis.com --project=oshi-high
-
-# Docker リポジトリ作成
-gcloud artifacts repositories create docker-repo \
-  --repository-format=docker \
-  --location=asia-northeast1 \
-  --project=oshi-high
-```
-
-### Phase 3: Cloud Run Service アカウント設定
-```bash
-# Cloud Run 実行用サービスアカウント作成
-gcloud iam service-accounts create cloud-run-app \
-  --display-name="Cloud Run Application" \
-  --project=oshi-high
-
-# Cloud SQL Client IAM ロール付与
-gcloud projects add-iam-policy-binding oshi-high \
-  --member=serviceAccount:cloud-run-app@oshi-high.iam.gserviceaccount.com \
-  --role=roles/cloudsql.client
-
-# Artifact Registry 読み取り権限
-gcloud projects add-iam-policy-binding oshi-high \
-  --member=serviceAccount:cloud-run-app@oshi-high.iam.gserviceaccount.com \
-  --role=roles/artifactregistry.reader
-```
-
-### Phase 4: Staging デプロイテスト
-```bash
-# 1. main ブランチに push
+# 既存の cloud-run.yml で自動実行
 git push origin fix/agent-handoffs:main
 
-# 2. GitHub Actions で自動デプロイ実行
-# → app-deploy-staging.yml が自動実行
+# または GitHub Actions UI から手動実行
+# → Actions タブ → "Deploy to Cloud Run" → "Run workflow"
 
-# 3. Cloud Run で確認
+# デプロイ確認
 gcloud run services list --region=asia-northeast1 --project=oshi-high
-gcloud run services describe oshi-high-staging --region=asia-northeast1 --project=oshi-high
-
-# 4. Health check
-STAGING_URL=$(gcloud run services describe oshi-high-staging --region=asia-northeast1 --format='value(status.url)' --project=oshi-high)
-curl $STAGING_URL/api/idols
+gcloud run services describe oshi-service --region=asia-northeast1 --project=oshi-high
 ```
 
-### Phase 5: Production デプロイ準備
+### Phase 3: Cloud Build 統合の確認
 ```bash
-# 1. リリース版タグをつける
-git tag v1.0.0-staging
-git push origin v1.0.0-staging
+# Cloud Build の自動トリガーが設定されているか確認
+gcloud builds list --limit=5
 
-# 2. Docker イメージをビルド & Push
-docker build -t asia-northeast1-docker.pkg.dev/oshi-high/docker-repo/oshi-high-app:v1.0.0 .
-docker push asia-northeast1-docker.pkg.dev/oshi-high/docker-repo/oshi-high-app:v1.0.0
-
-# 3. GitHub Actions で手動デプロイ
-# → Actions タブ → "Deploy Application to Cloud Run (Production)" 
-# → "Run workflow" → version: "v1.0.0"
-
-# 4. Production 確認
-PROD_URL=$(gcloud run services describe oshi-high-production --region=asia-northeast1 --format='value(status.url)' --project=oshi-high)
-curl $PROD_URL/api/idols
+# 手動トリガー
+gcloud builds submit --config=cloudbuild.yaml
 ```
 
 ---
