@@ -1,17 +1,18 @@
-name: Deploy to Cloud Run (Staging)
+name: Deploy to Cloud Run (Production)
 
 on:
   workflow_dispatch:
   push:
-    branches: [ develop ]
+    branches: [ main ]
 
 env:
   REGION: asia-northeast1
-  SERVICE_NAME: oshi-service-staging
+  SERVICE_NAME: oshi-service
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: production
     permissions:
       contents: read
       id-token: write
@@ -35,23 +36,27 @@ jobs:
       - name: Build & Push Image
         run: |
           gcloud auth configure-docker asia-northeast1-docker.pkg.dev
-          IMAGE=asia-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GCP_ARTIFACT_REPO }}/oshi-high:staging-${{ github.sha }}
+          IMAGE=asia-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GCP_ARTIFACT_REPO }}/oshi-high:prod-${{ github.sha }}
           docker build -t $IMAGE .
           docker push $IMAGE
 
-      - name: Deploy to Cloud Run (Staging)
+      - name: Deploy to Cloud Run (Production)
         run: |
-          IMAGE=asia-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GCP_ARTIFACT_REPO }}/oshi-high:staging-${{ github.sha }}
+          IMAGE=asia-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GCP_ARTIFACT_REPO }}/oshi-high:prod-${{ github.sha }}
           gcloud run deploy ${{ env.SERVICE_NAME }} \
             --image $IMAGE \
             --region ${{ env.REGION }} \
             --platform managed \
             --allow-unauthenticated \
             --port 8080 \
-            --set-env-vars DATABASE_URL=${{ secrets.STAGING_DATABASE_URL }},NODE_ENV=staging
+            --set-env-vars DATABASE_URL=${{ secrets.PROD_DATABASE_URL }},NODE_ENV=production \
+            --min-instances 2 \
+            --max-instances 50 \
+            --memory 1024Mi \
+            --cpu 2
 
-      - name: Get Staging URL
+      - name: Get Production URL
         run: |
           URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} --region ${{ env.REGION }} --format='value(status.url)')
-          echo "✅ Staging deployed: $URL"
+          echo "✅ Production deployed: $URL"
           curl -f $URL/api/idols || echo "Health check pending..."
