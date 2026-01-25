@@ -7,12 +7,11 @@ terraform {
     }
   }
 
-  # Temporarily using local backend for staging initialization
-  # Will migrate to GCS after state bucket is created
-  # backend "gcs" {
-  #   bucket  = "oshi-high-tfstate-staging"
-  #   prefix  = "terraform/staging"
-  # }
+  # GCS backend for staging environment
+  backend "gcs" {
+    bucket  = "oshi-high-tfstate-staging"
+    prefix  = "terraform/staging"
+  }
 }
 
 provider "google" {
