@@ -36,6 +36,12 @@ output "db_user" {
   description = "Database user name"
 }
 
+output "db_password" {
+  value       = random_password.db_password.result
+  sensitive   = true
+  description = "Database password (sensitive - store in Secret Manager)"
+}
+
 # GCS outputs
 output "gcs_bucket_name" {
   value       = google_storage_bucket.assets.name
