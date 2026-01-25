@@ -29,11 +29,15 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=8080
 ENV HOSTNAME=0.0.0.0
 
-USER node
 COPY --chown=node:node --from=builder /app/.next/standalone ./
 COPY --chown=node:node --from=builder /app/.next/static ./.next/static
 COPY --chown=node:node --from=builder /app/public ./public
+COPY --chown=node:node --from=builder /app/prisma ./prisma/
+COPY --chown=node:node --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+
+USER node
 
 EXPOSE 8080
 
-CMD ["node", "server.js"]
+# Run Prisma migration on startup (if needed)
+CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]
