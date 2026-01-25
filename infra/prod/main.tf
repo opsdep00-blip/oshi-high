@@ -9,11 +9,6 @@ resource "google_sql_database_instance" "prod" {
     tier              = var.db_tier
     availability_type = "REGIONAL"  # High availability for production
 
-    database_flags {
-      name  = "cloudsql_iam_authentication"
-      value = "on"
-    }
-
     ip_configuration {
       ipv4_enabled   = true
       ssl_mode       = "ENCRYPTED_ONLY"
@@ -28,7 +23,7 @@ resource "google_sql_database_instance" "prod" {
       start_time                     = "02:00"
       location                       = var.region
       point_in_time_recovery_enabled = true
-      transaction_log_retention_days = 30  # Extended for production
+      transaction_log_retention_days = 7  # Maximum allowed for Cloud SQL
     }
   }
 }
