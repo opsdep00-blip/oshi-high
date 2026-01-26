@@ -58,6 +58,7 @@ jobs:
             --platform=managed \
             --allow-unauthenticated \
             --port=8080 \
+            --set-cloudsql-instances=oshi-high:asia-northeast1:oshi-high-staging-db \
             --set-env-vars="DATABASE_URL=${DB_URL},NODE_ENV=staging"
 
       - name: Get Staging URL
