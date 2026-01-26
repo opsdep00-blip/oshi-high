@@ -37,21 +37,23 @@ jobs:
         run: |
           echo "GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}"
           echo "GCP_ARTIFACT_REPO: ${{ secrets.GCP_ARTIFACT_REPO }}"
-          echo "Full image name would be: asia-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GCP_ARTIFACT_REPO }}/oshi-high:prod-${{ github.sha }}"
+          GCP_PROJ="${{ secrets.GCP_PROJECT_ID }}"
+          GCP_REPO="${{ secrets.GCP_ARTIFACT_REPO }}"
+          echo "Full image name would be: asia-northeast1-docker.pkg.dev/${GCP_PROJ}/${GCP_REPO}/oshi-high:prod-${{ github.sha }}"
 
       - name: Build & Push Image
         run: |
           gcloud auth configure-docker asia-northeast1-docker.pkg.dev
-          IMAGE=asia-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GCP_ARTIFACT_REPO }}/oshi-high:prod-${{ github.sha }}
-          echo "Building image: $IMAGE"
-          docker build -t $IMAGE .
-          docker push $IMAGE
+          IMAGE="asia-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GCP_ARTIFACT_REPO }}/oshi-high:prod-${{ github.sha }}"
+          echo "Building image: ${IMAGE}"
+          docker build -t "${IMAGE}" .
+          docker push "${IMAGE}"
 
       - name: Deploy to Cloud Run (Production)
         run: |
-          IMAGE=asia-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GCP_ARTIFACT_REPO }}/oshi-high:prod-${{ github.sha }}
+          IMAGE="asia-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GCP_ARTIFACT_REPO }}/oshi-high:prod-${{ github.sha }}"
           gcloud run deploy ${{ env.SERVICE_NAME }} \
-            --image $IMAGE \
+            --image "${IMAGE}" \
             --region ${{ env.REGION }} \
             --platform managed \
             --allow-unauthenticated \
