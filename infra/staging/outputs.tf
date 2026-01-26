@@ -26,7 +26,13 @@ output "db_password" {
 output "database_url" {
   value       = "postgresql://${google_sql_user.oshi_user.name}:${urlencode(random_password.db_password.result)}@/oshi_high_staging?host=/cloudsql/${google_sql_database_instance.staging.connection_name}"
   sensitive   = true
-  description = "Full DATABASE_URL for Cloud Run with URL-encoded password"
+  description = "Full DATABASE_URL for Cloud Run with Unix Domain Socket (for connection pooling)"
+}
+
+output "database_url_direct" {
+  value       = "postgresql://${google_sql_user.oshi_user.name}:${urlencode(random_password.db_password.result)}@${google_sql_database_instance.staging.public_ip_address}:5432/oshi_high_staging"
+  sensitive   = true
+  description = "Direct DATABASE_URL_DIRECT via TCP for Prisma (no Unix Domain Socket)"
 }
 
 output "gcs_bucket_name" {
