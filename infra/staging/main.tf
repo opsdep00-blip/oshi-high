@@ -45,10 +45,13 @@ resource "google_sql_user" "oshi_user" {
   password = random_password.db_password.result
 }
 
-# Random password
+# Random password (no special characters to avoid URL encoding issues)
 resource "random_password" "db_password" {
   length  = 32
-  special = true
+  special = false
+  upper   = true
+  lower   = true
+  numeric = true
 }
 
 # GCS Bucket
