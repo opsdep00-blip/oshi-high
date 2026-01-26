@@ -69,4 +69,3 @@ jobs:
         run: |
           URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} --region ${{ env.REGION }} --format='value(status.url)')
           echo "✅ Production deployed: $URL"
-          curl -f $URL/api/idols || echo "Health check pending..."
