@@ -24,9 +24,9 @@ output "db_password" {
 }
 
 output "database_url" {
-  value       = "postgresql://${google_sql_user.oshi_user.name}:${urlencode(random_password.db_password.result)}@/${google_sql_database.oshi_high_staging.name}?host=/cloudsql/${google_sql_database_instance.staging.connection_name}"
+  value       = "postgresql://${google_sql_user.oshi_user.name}:${urlencode(random_password.db_password.result)}@/oshi_high_staging?host=/cloudsql/${google_sql_database_instance.staging.connection_name}"
   sensitive   = true
-  description = "Full DATABASE_URL for Cloud Run with URL-encoded password (store as STAGING_DATABASE_URL)"
+  description = "Full DATABASE_URL for Cloud Run with URL-encoded password"
 }
 
 output "gcs_bucket_name" {
