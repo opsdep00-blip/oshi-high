@@ -8,8 +8,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY package*.json ./
 COPY prisma ./prisma/
 RUN npm ci
-# Prisma generate を skip（runtime に使用される）
-RUN npx prisma generate --skip-engine-check || true
+# Prisma generate は必須 - Prisma Client を生成（DATABASE_URL_DIRECT 対応）
+RUN npx prisma generate
 
 # ソースをコピーしてビルド
 COPY . .
