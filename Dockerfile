@@ -29,16 +29,16 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=8080
 ENV HOSTNAME=0.0.0.0
 
-COPY --chown=node:node --from=builder /app/.next/standalone ./
-COPY --chown=node:node --from=builder /app/.next/static ./.next/static
-COPY --chown=node:node --from=builder /app/public ./public
-COPY --chown=node:node --from=builder /app/prisma ./prisma/
-COPY --chown=node:node --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+# Copy standalone Next.js build directly to root
+COPY --chown=node:node --from=builder /app/.next/standalone /app/
+COPY --chown=node:node --from=builder /app/.next/static /app/.next/static
+COPY --chown=node:node --from=builder /app/public /app/public
+COPY --chown=node:node --from=builder /app/prisma /app/prisma
+COPY --chown=node:node --from=builder /app/node_modules/.prisma /app/node_modules/.prisma
 
 USER node
 
 EXPOSE 8080
 
-# Run Prisma migration (non-blocking) and start server
-# Use node directly to ensure proper signal handling
-CMD ["node", ".next/standalone/server.js"]
+# Start Next.js server
+CMD ["node", "/app/server.js"]
