@@ -9,26 +9,13 @@ resource "google_service_account" "terraform" {
   description  = "Service Account for Terraform to manage GCP resources in staging"
 }
 
-# Cloud SQL Admin ロール付与
-# resource "google_project_iam_member" "terraform_cloudsql_admin" {
-#   project = var.project_id
-#   role    = "roles/cloudsql.admin"
-#   member  = "serviceAccount:${google_service_account.terraform.email}"
-# }
-
-# Cloud Storage Admin ロール付与
-# resource "google_project_iam_member" "terraform_storage_admin" {
-#   project = var.project_id
-#   role    = "roles/storage.admin"
-#   member  = "serviceAccount:${google_service_account.terraform.email}"
-# }
-
-# Service Account User ロール付与
-# resource "google_project_iam_member" "terraform_service_account_user" {
-#   project = var.project_id
-#   role    = "roles/iam.serviceAccountUser"
-#   member  = "serviceAccount:${google_service_account.terraform.email}"
-# }
+# Note: IAM ロール付与は GCP コンソール側で手動実施
+# Terraform では権限不足により apply できないため、コンソールで以下のロールを付与してください：
+# - roles/artifactregistry.writer
+# - roles/run.admin
+# - roles/cloudsql.admin
+# - roles/storage.admin
+# - roles/iam.serviceAccountUser
 
 # Service Account Key 生成
 resource "google_service_account_key" "terraform" {
