@@ -4,14 +4,12 @@ FROM node:20-alpine AS builder
 RUN apk add --no-cache libc6-compat openssl
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
-ARG DATABASE_URL="postgresql://user:pass@localhost:5432/db"
-ENV DATABASE_URL=${DATABASE_URL}
-
+# Build time では DATABASE_URL を設定しない（Prisma generate は必須ではない）
 COPY package*.json ./
-# Prisma スキーマを先にコピーして generate する
 COPY prisma ./prisma/
 RUN npm ci
-RUN npx prisma generate
+# Prisma generate を skip（runtime に使用される）
+RUN npx prisma generate --skip-engine-check || true
 
 # ソースをコピーしてビルド
 COPY . .
@@ -23,11 +21,10 @@ FROM node:20-alpine AS runner
 RUN apk add --no-cache openssl
 WORKDIR /app
 ENV NODE_ENV=production
-ARG DATABASE_URL="postgresql://user:pass@localhost:5432/db"
-ENV DATABASE_URL=${DATABASE_URL}
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=8080
 ENV HOSTNAME=0.0.0.0
+# DATABASE_URL は runtime に設定される（Cloud Run の環境変数から）
 
 # Copy standalone Next.js build directly to root
 COPY --chown=node:node --from=builder /app/.next/standalone /app/
