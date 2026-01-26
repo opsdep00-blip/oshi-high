@@ -51,13 +51,7 @@ jobs:
       - name: Deploy to Cloud Run (Staging)
         run: |
           IMAGE="asia-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GCP_ARTIFACT_REPO }}/oshi-high:staging-${{ github.sha }}"
-          gcloud run deploy ${{ env.SERVICE_NAME }} \
-            --image "${IMAGE}" \
-            --region ${{ env.REGION }} \
-            --platform managed \
-            --allow-unauthenticated \
-            --port 8080 \
-            --set-env-vars DATABASE_URL=${{ secrets.STAGING_DATABASE_URL }},NODE_ENV=staging
+          gcloud run deploy ${{ env.SERVICE_NAME }} --image "${IMAGE}" --region ${{ env.REGION }} --platform managed --allow-unauthenticated --port 8080 --set-env-vars DATABASE_URL=${{ secrets.STAGING_DATABASE_URL }},NODE_ENV=staging
 
       - name: Get Staging URL
         run: |
