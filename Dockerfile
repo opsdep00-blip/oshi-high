@@ -39,6 +39,6 @@ USER node
 
 EXPOSE 8080
 
-# Run Prisma migration on startup (if needed) and then start server
-# Add health check and verbose logging
-CMD ["sh", "-c", "echo 'Starting server...' && npx prisma migrate deploy 2>&1 | grep -i error || echo 'Migration skipped/completed' && echo 'Starting Next.js server on port 8080...' && exec node .next/standalone/server.js"]
+# Run Prisma migration (non-blocking) and start server
+# Use node directly to ensure proper signal handling
+CMD ["node", ".next/standalone/server.js"]

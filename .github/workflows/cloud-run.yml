@@ -64,8 +64,13 @@ jobs:
             --min-instances=0 || DEPLOY_FAILED=1
           
           if [ "$DEPLOY_FAILED" = "1" ]; then
-            echo "❌ Deployment failed. Checking Cloud Run logs..."
-            gcloud run services describe ${{ env.SERVICE_NAME }} --region=${{ env.REGION }} 2>/dev/null || true
+            echo "❌ Deployment failed. Fetching Cloud Run logs..."
+            REVISION=$(gcloud run services describe ${{ env.SERVICE_NAME }} --region=${{ env.REGION }} --format='value(status.latestRevision.name)' 2>/dev/null || echo "")
+            if [ ! -z "$REVISION" ]; then
+              echo "Latest revision: $REVISION"
+              echo "Fetching logs..."
+              gcloud logging read "resource.type=cloud_run_revision AND resource.labels.revision_name=$REVISION" --limit=50 --format=json 2>/dev/null | head -100
+            fi
             exit 1
           fi
 
