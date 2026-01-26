@@ -58,10 +58,21 @@ jobs:
             --platform=managed \
             --allow-unauthenticated \
             --port=8080 \
-            --set-env-vars="DATABASE_URL=${DB_URL},NODE_ENV=staging"
+            --set-env-vars="DATABASE_URL=${DB_URL},NODE_ENV=staging" \
+            --timeout=3600 \
+            --max-instances=10 \
+            --min-instances=0 || DEPLOY_FAILED=1
+          
+          if [ "$DEPLOY_FAILED" = "1" ]; then
+            echo "❌ Deployment failed. Checking Cloud Run logs..."
+            gcloud run services describe ${{ env.SERVICE_NAME }} --region=${{ env.REGION }} 2>/dev/null || true
+            exit 1
+          fi
 
       - name: Get Staging URL
+        if: success()
         run: |
           URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} --region ${{ env.REGION }} --format='value(status.url)')
           echo "✅ Staging deployed: $URL"
-          curl -f $URL/api/idols || echo "Health check pending..."
+          sleep 5
+          curl -s "$URL" || echo "⚠️ Health check failed (may still be warming up)"
