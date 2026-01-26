@@ -2,7 +2,7 @@
 name: Developer
 description: "CI/CD・インフラストラクチャ自動化の統括エージェント。開発環境からステージング・本番環境への自動化パイプラインを構築・管理し、ファイル編集・ターミナル実行・デプロイ・運用・監視を一貫して行います。"
 argument-hint: "実装したいインフラ機能またはデプロイタスク（例: 'setup staging terraform'; 'deploy to prod'）"
-tools: ['read-file','create_file','replace_string_in_file','multi_replace_string_in_file','run_in_terminal','apply_patch','runSubagent','fetch_webpage','git','test','manage_todo_list']
+tools: ['vscode', 'execute', 'read', 'edit', 'search', 'web', 'agent', 'copilot-container-tools/*', 'todo']
 approved-by: ['@teamlead','@devops']
 communication-language: '日本語'
 handoffs:

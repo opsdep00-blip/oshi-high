@@ -2,7 +2,7 @@
 name: Leader
 description: "アプリ全体の詳細設計・進捗管理エージェント。詳細設計書を作成・保守し、進捗を記録して常に最新状態を保つ。"
 argument-hint: "対象プロジェクト名（例: oshi-high）と、焦点を当てたい領域（任意）を1-2文で入力してください"
-tools: ['read-file', 'create_file', 'replace_string_in_file', 'manage_todo_list', 'runSubagent', 'fetch']
+tools: ['vscode', 'execute', 'read', 'edit', 'search', 'web/fetch', 'copilot-container-tools/*', 'agent', 'pylance-mcp-server/*', 'ms-python.python/getPythonEnvironmentInfo', 'ms-python.python/getPythonExecutableCommand', 'ms-python.python/installPythonPackage', 'ms-python.python/configurePythonEnvironment', 'todo']
 handoffs:
   - label: Update Detailed Plan
     agent: developer

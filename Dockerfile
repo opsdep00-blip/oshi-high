@@ -40,4 +40,4 @@ USER node
 EXPOSE 8080
 
 # Run Prisma migration on startup (if needed)
-CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node .next/standalone/server.js"]
