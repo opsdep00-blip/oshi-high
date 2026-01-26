@@ -43,9 +43,9 @@ output "db_password" {
 }
 
 output "database_url" {
-  value       = "postgresql://${google_sql_user.oshi_user.name}:${random_password.db_password.result}@/${google_sql_database.oshi_high_prod.name}?host=/cloudsql/${google_sql_database_instance.prod.connection_name}"
+  value       = "postgresql://${google_sql_user.oshi_user.name}:${urlencode(random_password.db_password.result)}@/${google_sql_database.oshi_high_prod.name}?host=/cloudsql/${google_sql_database_instance.prod.connection_name}"
   sensitive   = true
-  description = "Full DATABASE_URL for Cloud Run (store as GitHub Secret PROD_DATABASE_URL)"
+  description = "Full DATABASE_URL for Cloud Run with URL-encoded password (store as PROD_DATABASE_URL)"
 }
 
 # GCS outputs
