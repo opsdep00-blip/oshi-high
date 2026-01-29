@@ -52,20 +52,17 @@ jobs:
       - name: Deploy to Cloud Run (Production)
         run: |
           IMAGE="asia-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GCP_ARTIFACT_REPO }}/oshi-high:prod-${{ github.sha }}"
-          DB_URL="${{ secrets.PROD_DATABASE_URL }}"
-          DB_URL_DIRECT="${{ secrets.PROD_DATABASE_URL_DIRECT }}"
           gcloud run deploy ${{ env.SERVICE_NAME }} \
             --image="${IMAGE}" \
             --region=${{ env.REGION }} \
             --platform=managed \
             --allow-unauthenticated \
             --port=8080 \
-            --set-cloudsql-instances=oshi-high:asia-northeast1:oshi-high-prod-db \
-            --set-env-vars="DATABASE_URL=${DB_URL},DATABASE_URL_DIRECT=${DB_URL_DIRECT},NODE_ENV=production" \
-            --min-instances=2 \
-            --max-instances=50 \
-            --memory=1024Mi \
-            --cpu=2
+            --set-env-vars="DATABASE_URL=${{ secrets.PROD_DATABASE_URL }},NODE_ENV=production" \
+            --min-instances=1 \
+            --max-instances=10 \
+            --memory=512Mi \
+            --cpu=1
 
       - name: Get Production URL
         run: |

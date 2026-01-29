@@ -7,8 +7,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL_DIRECT")
-  directUrl = env("DATABASE_URL")
+  url      = env("DATABASE_URL")
 }
 
 // ===== Auth.js (NextAuth) 標準テーブル =====
