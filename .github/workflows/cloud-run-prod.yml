@@ -33,14 +33,6 @@ jobs:
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Debug Secrets
-        run: |
-          echo "GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}"
-          echo "GCP_ARTIFACT_REPO: ${{ secrets.GCP_ARTIFACT_REPO }}"
-          GCP_PROJ="${{ secrets.GCP_PROJECT_ID }}"
-          GCP_REPO="${{ secrets.GCP_ARTIFACT_REPO }}"
-          echo "Full image name would be: asia-northeast1-docker.pkg.dev/${GCP_PROJ}/${GCP_REPO}/oshi-high:prod-${{ github.sha }}"
-
       - name: Build & Push Image
         run: |
           gcloud auth configure-docker asia-northeast1-docker.pkg.dev
