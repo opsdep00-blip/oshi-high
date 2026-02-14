@@ -37,7 +37,14 @@ jobs:
           gcloud auth configure-docker asia-northeast1-docker.pkg.dev
           IMAGE="asia-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GCP_ARTIFACT_REPO }}/oshi-high:staging-${{ github.sha }}"
           echo "Building image: ${IMAGE}"
-          docker build -t "${IMAGE}" .
+          docker build \
+            --build-arg NEXT_PUBLIC_FIREBASE_API_KEY="${{ secrets.STAGING_NEXT_PUBLIC_FIREBASE_API_KEY }}" \
+            --build-arg NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="${{ secrets.STAGING_NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}" \
+            --build-arg NEXT_PUBLIC_FIREBASE_PROJECT_ID="${{ secrets.STAGING_NEXT_PUBLIC_FIREBASE_PROJECT_ID }}" \
+            --build-arg NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="${{ secrets.STAGING_NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}" \
+            --build-arg NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="${{ secrets.STAGING_NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}" \
+            --build-arg NEXT_PUBLIC_FIREBASE_APP_ID="${{ secrets.STAGING_NEXT_PUBLIC_FIREBASE_APP_ID }}" \
+            -t "${IMAGE}" .
           docker push "${IMAGE}"
 
       - name: Deploy to Cloud Run (Staging)
@@ -49,7 +56,7 @@ jobs:
             --platform=managed \
             --allow-unauthenticated \
             --port=8080 \
-            --set-env-vars="DATABASE_URL=${{ secrets.STAGING_DATABASE_URL }},NODE_ENV=staging"
+            --set-env-vars="DATABASE_URL=${{ secrets.STAGING_DATABASE_URL }},NODE_ENV=staging,SMS_PROVIDER=firebase,ENABLE_SMS_MOCK=false,FIREBASE_PROJECT_ID=${{ secrets.STAGING_FIREBASE_PROJECT_ID }},FIREBASE_CLIENT_EMAIL=${{ secrets.STAGING_FIREBASE_CLIENT_EMAIL }},FIREBASE_PRIVATE_KEY=${{ secrets.STAGING_FIREBASE_PRIVATE_KEY }},NEXTAUTH_URL=${{ secrets.STAGING_NEXTAUTH_URL }},NEXTAUTH_SECRET=${{ secrets.STAGING_NEXTAUTH_SECRET }},PHONE_HASH_SECRET=${{ secrets.STAGING_PHONE_HASH_SECRET }}"
 
       - name: Get Staging URL
         run: |
