@@ -1,0 +1,79 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches:
+      - staging
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: oshi-high-485811
+  REGION: asia-northeast1
+  SERVICE_NAME: oshi-service-staging
+  IMAGE_NAME: gcr.io/oshi-high-485811/oshi-service-staging
+  TF_STATE_BUCKET: oshi-high-tfstate-staging
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Google Auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        working-directory: ./infra/staging
+        run: terraform init -backend-config="bucket=${{ env.TF_STATE_BUCKET }}"
+
+      - name: Terraform Apply
+        working-directory: ./infra/staging
+        run: terraform apply -auto-approve
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Configure Docker
+        run: gcloud auth configure-docker
+
+      - name: Build and Push Container
+        run: |
+          docker build \
+            --platform linux/amd64 \
+            --build-arg NEXT_PUBLIC_FIREBASE_API_KEY="${{ secrets.STAGING_NEXT_PUBLIC_FIREBASE_API_KEY }}" \
+            --build-arg NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="${{ secrets.STAGING_NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}" \
+            --build-arg NEXT_PUBLIC_FIREBASE_PROJECT_ID="${{ secrets.STAGING_NEXT_PUBLIC_FIREBASE_PROJECT_ID }}" \
+            --build-arg NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="${{ secrets.STAGING_NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}" \
+            --build-arg NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="${{ secrets.STAGING_NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}" \
+            --build-arg NEXT_PUBLIC_FIREBASE_APP_ID="${{ secrets.STAGING_NEXT_PUBLIC_FIREBASE_APP_ID }}" \
+            -t $IMAGE_NAME:${{ github.sha }} \
+            -t $IMAGE_NAME:latest .
+          docker push $IMAGE_NAME:${{ github.sha }}
+          docker push $IMAGE_NAME:latest
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy $SERVICE_NAME \
+            --image $IMAGE_NAME:${{ github.sha }} \
+            --region $REGION \
+            --platform=managed \
+            --allow-unauthenticated \
+            --port=8080 \
+            --set-env-vars="DATABASE_URL=${{ secrets.STAGING_DATABASE_URL }},NODE_ENV=staging,SMS_PROVIDER=firebase,ENABLE_SMS_MOCK=false,FIREBASE_PROJECT_ID=${{ secrets.STAGING_FIREBASE_PROJECT_ID }},FIREBASE_CLIENT_EMAIL=${{ secrets.STAGING_FIREBASE_CLIENT_EMAIL }},FIREBASE_PRIVATE_KEY=${{ secrets.STAGING_FIREBASE_PRIVATE_KEY }},NEXTAUTH_URL=${{ secrets.STAGING_NEXTAUTH_URL }},NEXTAUTH_SECRET=${{ secrets.STAGING_NEXTAUTH_SECRET }},PHONE_HASH_SECRET=${{ secrets.STAGING_PHONE_HASH_SECRET }},FORCE_REDEPLOY=${{ github.sha }}"
+
+      - name: Get Staging URL
+        run: |
+          URL=$(gcloud run services describe $SERVICE_NAME --region $REGION --format='value(status.url)')
+          echo "✅ Staging deployed: $URL"

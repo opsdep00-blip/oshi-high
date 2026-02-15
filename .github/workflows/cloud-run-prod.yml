@@ -38,7 +38,14 @@ jobs:
           gcloud auth configure-docker asia-northeast1-docker.pkg.dev
           IMAGE="asia-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GCP_ARTIFACT_REPO }}/oshi-high:prod-${{ github.sha }}"
           echo "Building image: ${IMAGE}"
-          docker build -t "${IMAGE}" .
+          docker build \
+            --build-arg NEXT_PUBLIC_FIREBASE_API_KEY="${{ secrets.PROD_NEXT_PUBLIC_FIREBASE_API_KEY }}" \
+            --build-arg NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="${{ secrets.PROD_NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}" \
+            --build-arg NEXT_PUBLIC_FIREBASE_PROJECT_ID="${{ secrets.PROD_NEXT_PUBLIC_FIREBASE_PROJECT_ID }}" \
+            --build-arg NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="${{ secrets.PROD_NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}" \
+            --build-arg NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="${{ secrets.PROD_NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}" \
+            --build-arg NEXT_PUBLIC_FIREBASE_APP_ID="${{ secrets.PROD_NEXT_PUBLIC_FIREBASE_APP_ID }}" \
+            -t "${IMAGE}" .
           docker push "${IMAGE}"
 
       - name: Deploy to Cloud Run (Production)
@@ -50,7 +57,7 @@ jobs:
             --platform=managed \
             --allow-unauthenticated \
             --port=8080 \
-            --set-env-vars="DATABASE_URL=${{ secrets.PROD_DATABASE_URL }},NODE_ENV=production" \
+            --set-env-vars="DATABASE_URL=${{ secrets.PROD_DATABASE_URL }},NODE_ENV=production,SMS_PROVIDER=firebase,ENABLE_SMS_MOCK=false,FIREBASE_PROJECT_ID=${{ secrets.PROD_FIREBASE_PROJECT_ID }},FIREBASE_CLIENT_EMAIL=${{ secrets.PROD_FIREBASE_CLIENT_EMAIL }},FIREBASE_PRIVATE_KEY=${{ secrets.PROD_FIREBASE_PRIVATE_KEY }},NEXTAUTH_URL=${{ secrets.PROD_NEXTAUTH_URL }},NEXTAUTH_SECRET=${{ secrets.PROD_NEXTAUTH_SECRET }},PHONE_HASH_SECRET=${{ secrets.PROD_PHONE_HASH_SECRET }}" \
             --min-instances=1 \
             --max-instances=10 \
             --memory=512Mi \

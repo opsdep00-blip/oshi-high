@@ -2,180 +2,174 @@ import NextAuth from "next-auth";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import TwitterProvider from "next-auth/providers/twitter";
 import CredentialsProvider from "next-auth/providers/credentials";
-import crypto from "crypto";
+import GoogleProvider from "next-auth/providers/google";
 import { prisma } from "@/lib/prisma";
-import { hashPhoneNumber, verifyPhoneNumber } from "@/lib/phoneHash";
+
+import { randomBytes } from "crypto";
+import logger from "@/lib/logger";
+import { verifySmsCode } from "@/lib/smsAuth";
 import type { JWT } from "next-auth/jwt";
 import type { Session } from "next-auth";
 import type { User, Account } from "next-auth";
 
+// Typed token that includes phoneVerified flag
+type JwtWithPhone = JWT & { phoneVerified?: boolean };
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  // ⚠️ 重要: CredentialsProvider を使用する場合、adapter は使用できません
-  // PrismaAdapter は OAuth プロバイダー（Twitter など）でのみ使用可能
-  // CredentialsProvider は JWT セッション戦略と組み合わせて使用します
-  providers: [
-    // SMS 認証 (ファン向け)
-    CredentialsProvider({
-      id: "sms",
-      name: "SMS Authentication",
-      credentials: {
-        phone: { label: "Phone Number", type: "tel", placeholder: "09012345678" },
-        code: { label: "Verification Code", type: "text", placeholder: "123456" },
-      },
-      async authorize(credentials: any) {
-        console.log("=== [Auth] Received credentials ===", credentials);
+  // ⚠️ 重要: 正式なログイン認証は OAuth 2.0 (Google / Twitter) で実装予定
+  // SMS認証は /api/debug/sms/ の一時的なデバッグエンドポイントに移動
+  // SMS認証の本来の用途: 推し本人による「Claim」機能の検証（ログインではない）
+  
+  adapter: PrismaAdapter(prisma),
+  
+  providers: (() => {
+    // Base providers (real OAuth)
+    const providers = [
+      GoogleProvider({
+        clientId: process.env.GOOGLE_CLIENT_ID || "",
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+      }),
 
-        if (!credentials?.phone || !credentials?.code) {
-          throw new Error("Phone number and verification code are required");
-        }
+      TwitterProvider({
+        clientId: process.env.TWITTER_CLIENT_ID || "",
+        clientSecret: process.env.TWITTER_CLIENT_SECRET || "",
+      }),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ] as any[];
 
-        // ステップ 1: 電話番号をハッシュ化
-        // 注: VerificationToken 検証用には salt なしの単純なハッシュを使用
-        const phoneHash = crypto.createHash("sha256").update(credentials.phone).digest("hex");
-        console.log("=== [Auth] phoneHash ===", phoneHash);
-        console.log("=== [Auth] code ===", credentials.code);
-
-        // ステップ 2: VerificationToken テーブルを検索
-        // identifier が phoneHash かつ token が code で、有効期限内のものを探す
-        const verificationToken = await prisma.verificationToken.findUnique({
-          where: {
-            identifier_token: {
-              identifier: phoneHash,
-              token: credentials.code,
-            },
+    // Development helper: enable mock OAuth flows for local development
+    if (process.env.ENABLE_OAUTH_MOCK === "true") {
+      providers.push(
+        CredentialsProvider({
+          id: "mock",
+          name: "Mock OAuth",
+          credentials: {
+            provider: { label: "provider", type: "text" },
+            name: { label: "name", type: "text" },
+            email: { label: "email", type: "email" },
           },
-        });
+          async authorize(credentials: Partial<Record<"email" | "provider" | "name", unknown>> | undefined) {
+            const provider = String((credentials?.provider as string) ?? "google");
+            const displayName = String((credentials?.name as string) ?? `${provider}-dev`);
+            const email = String((credentials?.email as string) ?? `${provider}@example.test`);
 
-        console.log("=== [Auth] Found token ===", verificationToken);
+            // Try to find a user by existing provider account
+            const account = await prisma.account.findFirst({ where: { provider, providerAccountId: `${email}` } });
+            let user: import("@prisma/client").User | null = null;
+            if (account) {
+              user = await prisma.user.findUnique({ where: { id: account.userId } });
+            }
 
-        if (!verificationToken) {
-          throw new Error("TOKEN_NOT_FOUND");
-        }
-
-        // ステップ 3: 有効期限をチェック
-        if (verificationToken.expires < new Date()) {
-          console.log("=== [Auth] Token expired ===", verificationToken.expires);
-          // 期限切れのコードを削除
-          await prisma.verificationToken.delete({
-            where: {
-              identifier_token: {
-                identifier: phoneHash,
-                token: credentials.code,
-              },
-            },
-          });
-          throw new Error("TOKEN_EXPIRED");
-        }
-
-        // ステップ 4: User テーブルからユーザーを取得（いなければ新規作成）
-        let user = await prisma.user.findUnique({
-          where: { phoneHash },
-        });
-
-        if (!user) {
-          // 新規ユーザー作成
-          // 注: User テーブルには salt なしハッシュを保存（一貫性のため）
-          user = await prisma.user.create({
-            data: {
-              phoneHash,
-              phoneSalt: null, // salt は使用しない
-              role: "FAN",
-              accounts: {
-                create: {
-                  type: "credentials",
-                  provider: "sms",
-                  providerAccountId: phoneHash,
+            if (!user) {
+              user = await prisma.user.create({
+                data: {
+                  name: displayName,
+                  email,
+                  role: "FAN",
+                  accounts: { create: { type: "oauth", provider, providerAccountId: `${email}` } },
                 },
-              },
-            },
-          });
-          console.log(`[Auth] New user created: ${user.id}`);
-        } else {
-          console.log(`[Auth] Existing user authenticated: ${user.id}`);
-        }
+              });
+            } else {
+              // ensure account exists
+              const hasAcc = await prisma.account.findFirst({ where: { userId: user.id, provider } });
+              if (!hasAcc) {
+                await prisma.account.create({ data: { userId: user.id, type: "oauth", provider, providerAccountId: `${email}` } });
+              }
+            }
 
-        // ステップ 5: ログイン成功後は VerificationToken を削除
-        try {
-          await prisma.verificationToken.delete({
-            where: {
-              identifier_token: {
-                identifier: phoneHash,
-                token: credentials.code,
-              },
-            },
-          });
-          console.log(`[Auth] Verification token deleted for user ${user.id}`);
-        } catch (deleteError) {
-          console.error("[Auth] Error deleting verification token:", deleteError);
-          // エラーが発生してもログイン処理は続ける
-        }
+            return { id: String(user.id), name: user.name, email: user.email };
+          },
+        })
+      );
+    }
 
-        return {
-          id: user.id,
-          email: user.email || undefined,
-          name: user.name || undefined,
-          image: user.image || undefined,
-        };
-      },
-    }),
+    // CredentialsProvider: SMS (supports idToken or phone+code)
+    providers.push(
+      CredentialsProvider({
+        id: "sms",
+        name: "SMS",
+        credentials: {
+          phone: { label: "Phone", type: "text" },
+          code: { label: "Code", type: "text" },
+          sessionInfo: { label: "SessionInfo", type: "text" },
+          idToken: { label: "ID Token", type: "text" },
+        },
+        async authorize(credentials: Record<string, unknown> | undefined) {
+          if (!credentials) return null;
 
-    // SNS 認証 (推し本人向け)
-    TwitterProvider({
-      clientId: process.env.TWITTER_CLIENT_ID || "",
-      clientSecret: process.env.TWITTER_CLIENT_SECRET || "",
-    }),
-  ],
+          // 1) ID Token path (client obtains ID token from Firebase and sends it here)
+          const idToken = String(credentials.idToken || "").trim();
+          if (idToken) {
+            try {
+              const { user } = await verifySmsCode({ idToken }, "", "signin");
+              return { id: String(user.id), name: user.name ?? null, email: user.email ?? null };
+            } catch (e) {
+              logger.warn("Credentials (sms) idToken verification failed", { error: e });
+              return null;
+            }
+          }
+
+          // 2) phone + code path (server-side verification)
+          const phone = String(credentials.phone || "").trim();
+          const code = String(credentials.code || "").trim();
+          const sessionInfo = String(credentials.sessionInfo || "").trim() || undefined;
+
+          if (phone && code) {
+            try {
+              const { user } = await verifySmsCode({ phone, sessionInfo }, code, "signin");
+              return { id: String(user.id), name: user.name ?? null, email: user.email ?? null };
+            } catch (e) {
+              logger.warn("Credentials (sms) phone/code verification failed", { error: e });
+              return null;
+            }
+          }
+
+          return null;
+        },
+      })
+    );
+
+    return providers;
+  })(),
 
   callbacks: {
     async signIn({ user, account }: { user: User; account?: Account | null }) {
-      // SMS 認証の場合: 重複ログイン防止
-      if (account?.provider === "sms") {
-        const existingUser = await prisma.user.findUnique({
-          where: { id: user.id },
-          include: { accounts: true },
-        });
-
-        // 複数の SMS Account を持つことを防止
-        const smsAccounts = existingUser?.accounts.filter(
-          (a: any) => a.provider === "sms"
-        );
-        if (smsAccounts && smsAccounts.length > 1) {
-          console.error(
-            `[Auth] Duplicate SMS registration attempt for user ${user.id}`
-          );
-          return false;
-        }
-      }
-
-      // Twitter 認証の場合: Idol Claim ロジック
+      // Handle Twitter claim as before
       if (account?.provider === "twitter") {
         const twitterId = account.providerAccountId;
 
-        // snsLink が一致する Idol を探す
-        const idol = await prisma.idol.findUnique({
-          where: { snsLink: twitterId },
-        });
+        const idol = await prisma.idol.findUnique({ where: { snsLink: twitterId } });
 
         if (idol && !idol.claimedBy) {
-          // Official Claim: User を Idol にリンク
-          await prisma.idol.update({
-            where: { id: idol.id },
-            data: {
-              claimedBy: user.id,
-              claimedAt: new Date(),
-              snsVerifiedAt: new Date(),
-            },
-          });
+          await prisma.idol.update({ where: { id: idol.id }, data: { claimedBy: user.id, claimedAt: new Date(), snsVerifiedAt: new Date() } });
+          await prisma.user.update({ where: { id: user.id }, data: { role: "IDOL" } });
+          logger.info(`[Auth] Idol ${idol.name} (${idol.id}) claimed by user ${user.id}`);
+        }
+      }
 
-          // User の role を IDOL に昇格
-          await prisma.user.update({
-            where: { id: user.id },
-            data: { role: "IDOL" },
-          });
+      // New: Prevent automatic linking when provider account is new but email exists
+      if (account) {
+        // Check if account already exists (provider+providerAccountId)
+        const existingAccount = await prisma.account.findUnique({ where: { provider_providerAccountId: { provider: account.provider, providerAccountId: account.providerAccountId } } });
+        if (existingAccount) {
+          return true; // normal flow
+        }
 
-          console.log(
-            `[Auth] Idol ${idol.name} (${idol.id}) claimed by user ${user.id}`
-          );
+        // if no account exists, check if a user with same email exists
+        if (user?.email) {
+          const existingUserByEmail = await prisma.user.findUnique({ where: { email: user.email } });
+          if (existingUserByEmail) {
+            // Create PendingLink and remove any temporary account created by adapter
+            const token = randomBytes(16).toString("hex");
+            const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+            await prisma.pendingLink.create({ data: { token, provider: account.provider, providerAccountId: account.providerAccountId, data: JSON.parse(JSON.stringify(account)), expiresAt } });
+
+            // delete any account that might have been created for this provider/accountId
+            await prisma.account.deleteMany({ where: { provider: account.provider, providerAccountId: account.providerAccountId } });
+
+            // Redirect to resolve page where user can choose to link
+            return `/auth/resolve?token=${token}`;
+          }
         }
       }
 
@@ -183,22 +177,46 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
 
     async jwt({ token, user }: { token: JWT; user?: User }) {
+      type JwtWithPhone = JWT & { phoneVerified?: boolean };
+      const t = token as JwtWithPhone;
       if (user) {
-        token.sub = user.id;
+        t.sub = user.id;
+        // include phoneVerified in token on sign in
+        t.phoneVerified = ((user as unknown as { phoneVerified?: boolean })?.phoneVerified) ?? false;
+      } else if (t.sub) {
+        // refresh phoneVerified from DB on subsequent requests
+        try {
+          const dbUser = await prisma.user.findUnique({ where: { id: t.sub } });
+          t.phoneVerified = dbUser?.phoneVerified ?? false;
+        } catch {
+          t.phoneVerified = t.phoneVerified ?? false;
+        }
       }
       return token;
     },
 
     async session({ session, token }: { session: Session; token: JWT }) {
+      type SessionUserWithPhone = Session['user'] & { id?: string; phoneVerified?: boolean };
       if (session.user && token.sub) {
         session.user.id = token.sub;
+        // expose phoneVerified in session
+        const u = session.user as SessionUserWithPhone;
+        const t = token as JwtWithPhone;
+        u.phoneVerified = t.phoneVerified ?? false;
       }
       return session;
+    },
+
+    // After sign in, redirect users to My Account page by default
+    async redirect({ url, baseUrl }: { url: string; baseUrl: string }) {
+      // If provider requested a specific callback, respect it
+      if (url && url !== baseUrl && url.startsWith(baseUrl)) return url;
+      return '/account';
     },
   },
 
   pages: {
-    signIn: "/auth/signin",
+    signIn: "/login",
     error: "/auth/error",
   },
 
