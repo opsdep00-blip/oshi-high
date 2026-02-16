@@ -39,10 +39,17 @@ jobs:
         working-directory: ./infra/staging
         run: terraform init -backend-config="bucket=${{ env.TF_STATE_BUCKET }}"
 
+      - name: Terraform Plan
+        working-directory: ./infra/staging
+        run: terraform plan -var="db_password=${{ secrets.STAGING_DB_PASSWORD }}" -out=tfplan
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GCP_SA_KEY }}
+          TF_VAR_db_password: ${{ secrets.STAGING_DB_PASSWORD }}
+
       - name: Terraform Apply
         working-directory: ./infra/staging
-        # Pass db_password both via TF_VAR and as a CLI -var to ensure Terraform cannot prompt
-        run: terraform apply -auto-approve -var="db_password=${{ secrets.STAGING_DB_PASSWORD }}"
+        # Run non-interactive, apply the saved plan file to make logs explicit
+        run: terraform apply -input=false -auto-approve tfplan
         env:
           GOOGLE_CREDENTIALS: ${{ secrets.GCP_SA_KEY }}
           TF_VAR_db_password: ${{ secrets.STAGING_DB_PASSWORD }}
