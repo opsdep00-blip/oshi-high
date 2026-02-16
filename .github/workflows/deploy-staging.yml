@@ -41,9 +41,11 @@ jobs:
 
       - name: Terraform Apply
         working-directory: ./infra/staging
-        run: terraform apply -auto-approve
+        # Pass db_password both via TF_VAR and as a CLI -var to ensure Terraform cannot prompt
+        run: terraform apply -auto-approve -var="db_password=${{ secrets.STAGING_DB_PASSWORD }}"
         env:
           GOOGLE_CREDENTIALS: ${{ secrets.GCP_SA_KEY }}
+          TF_VAR_db_password: ${{ secrets.STAGING_DB_PASSWORD }}
 
       - name: Configure Docker
         run: gcloud auth configure-docker
