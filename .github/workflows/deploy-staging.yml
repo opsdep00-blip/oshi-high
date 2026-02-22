@@ -32,6 +32,17 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Debug GCP identity
+        run: |
+          echo "--- credentials JSON ---"
+          echo "$GOOGLE_CREDENTIALS" | jq -r '.client_email, .project_id'
+          echo "--- gcloud active account ---"
+          gcloud auth list --filter=status:ACTIVE --format="value(account)"
+          echo "--- current project ---"
+          gcloud config get-value project
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GCP_SA_KEY }}
+
       - name: Debug GCP credentials
         run: |
           echo "---- credentials JSON ----"
