@@ -46,6 +46,9 @@ OSHI-HIGH プロジェクトの GCP インフラストラクチャ自動化（Te
   `terraform apply -target=google_storage_bucket.state` でブートストラップ。\
   remote backend はコード内ではなく `terraform init` 時の
   `-backend-config` で指定するように変更)
+- 🗝 reCAPTCHA キーを管理下で扱うようになったため、
+  GitHub シークレット `STAGING_RECAPTCHA_SITE_KEY` と
+  `STAGING_RECAPTCHA_SECRET_KEY` を追加してください。
 - ✅ GitHub Secrets 登録（`GCP_SA_KEY`）
 - ✅ Service Account キー生成
 - ✅ `.gitignore` 設定（sensitive files 除外）
