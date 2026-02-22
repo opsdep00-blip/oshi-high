@@ -54,9 +54,17 @@ jobs:
         working-directory: ./infra/staging
         run: |
           # create the storage bucket resource if it doesn't exist yet
-          terraform apply -input=false -auto-approve -target=google_storage_bucket.state
+          terraform apply -input=false -auto-approve -target=google_storage_bucket.state \
+            -var="project_id=${{ env.PROJECT_ID }}" \
+            -var="db_password=${{ secrets.STAGING_DB_PASSWORD }}" \
+            -var="recaptcha_site_key=${{ secrets.STAGING_RECAPTCHA_SITE_KEY }}" \
+            -var="recaptcha_secret_key=${{ secrets.STAGING_RECAPTCHA_SECRET_KEY }}"
         env:
           GOOGLE_CREDENTIALS: ${{ secrets.GCP_SA_KEY }}
+          TF_VAR_project_id: ${{ env.PROJECT_ID }}
+          TF_VAR_db_password: ${{ secrets.STAGING_DB_PASSWORD }}
+          TF_VAR_recaptcha_site_key: ${{ secrets.STAGING_RECAPTCHA_SITE_KEY }}
+          TF_VAR_recaptcha_secret_key: ${{ secrets.STAGING_RECAPTCHA_SECRET_KEY }}
 
       - name: Terraform Init
         working-directory: ./infra/staging
