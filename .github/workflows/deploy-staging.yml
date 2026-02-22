@@ -32,14 +32,19 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Debug GCP identity
+      - name: Debug GCP identity (hashed output)
         run: |
-          echo "--- credentials JSON ---"
-          echo "$GOOGLE_CREDENTIALS" | jq -r '.client_email, .project_id'
-          echo "--- gcloud active account ---"
-          gcloud auth list --filter=status:ACTIVE --format="value(account)"
-          echo "--- current project ---"
-          gcloud config get-value project
+          # parse the JSON but only output a hash of the fields so the
+          # raw values — which are part of the secret — won't be redacted
+          EMAIL=$(echo "$GOOGLE_CREDENTIALS" | jq -r '.client_email')
+          PROJECT=$(echo "$GOOGLE_CREDENTIALS" | jq -r '.project_id')
+          echo "client_email sha256: $(echo -n "$EMAIL" | sha256sum | cut -d' ' -f1)"
+          echo "project_id sha256: $(echo -n "$PROJECT" | sha256sum | cut -d' ' -f1)"
+          # gcloud auth and config output also hashed
+          ACTIVE=$(gcloud auth list --filter=status:ACTIVE --format="value(account)")
+          echo "active account sha256: $(echo -n "$ACTIVE" | sha256sum | cut -d' ' -f1)"
+          CURRENT=$(gcloud config get-value project)
+          echo "current project sha256: $(echo -n "$CURRENT" | sha256sum | cut -d' ' -f1)"
         env:
           GOOGLE_CREDENTIALS: ${{ secrets.GCP_SA_KEY }}
 
