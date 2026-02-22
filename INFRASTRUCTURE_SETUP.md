@@ -43,7 +43,9 @@ OSHI-HIGH プロジェクトの GCP インフラストラクチャ自動化（Te
 
 - ✅ GCS State Bucket 作成（`oshi-high-tfstate-staging`）
   (Terraform 構成 `infra/staging/storage.tf` に定義。初回は
-  `terraform apply -target=google_storage_bucket.state` でブートストラップ)
+  `terraform apply -target=google_storage_bucket.state` でブートストラップ。\
+  remote backend はコード内ではなく `terraform init` 時の
+  `-backend-config` で指定するように変更)
 - ✅ GitHub Secrets 登録（`GCP_SA_KEY`）
 - ✅ Service Account キー生成
 - ✅ `.gitignore` 設定（sensitive files 除外）

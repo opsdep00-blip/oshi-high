@@ -48,8 +48,7 @@ jobs:
 
       - name: Terraform Init (bootstrap)
         working-directory: ./infra/staging
-        # initialize without remote backend so we can create the bucket
-        run: terraform init -backend=false
+        run: terraform init
 
       - name: Bootstrap state bucket
         working-directory: ./infra/staging
