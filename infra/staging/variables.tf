@@ -24,3 +24,9 @@ variable "service_account_email" {
   description = "Service Account used by Cloud Run (optional; can be created by Terraform)"
   default     = ""
 }
+
+variable "db_password" {
+  type        = string
+  description = "Password for the database user; passed via env var from CI or terraform.tfvars"
+  sensitive   = true
+}
