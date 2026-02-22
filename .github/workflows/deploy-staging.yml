@@ -46,6 +46,19 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
+      - name: Terraform Init (bootstrap)
+        working-directory: ./infra/staging
+        # initialize without remote backend so we can create the bucket
+        run: terraform init -backend=false
+
+      - name: Bootstrap state bucket
+        working-directory: ./infra/staging
+        run: |
+          # create the storage bucket resource if it doesn't exist yet
+          terraform apply -input=false -auto-approve -target=google_storage_bucket.state
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GCP_SA_KEY }}
+
       - name: Terraform Init
         working-directory: ./infra/staging
         run: terraform init -backend-config="bucket=${{ env.TF_STATE_BUCKET }}"
