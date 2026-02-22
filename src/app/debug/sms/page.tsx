@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export default function DebugSmsPage() {
+  const router = useRouter();
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
-  const [step, setStep] = useState<"phone" | "code">("phone");
+  const [step, setStep] = useState<"phone" | "code" | "success">("phone");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [sessionInfo, setSessionInfo] = useState<string | null>(null);
@@ -39,7 +41,7 @@ export default function DebugSmsPage() {
     }
   };
 
-  // ステップ 2: コードを検証
+  // ステップ 2: コード検証
   const handleVerifyCode = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -49,7 +51,7 @@ export default function DebugSmsPage() {
       const response = await fetch("/api/debug/sms/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionInfo, code }),
+        body: JSON.stringify({ code, sessionInfo, phone }),
       });
 
       const data = await response.json();
@@ -58,10 +60,12 @@ export default function DebugSmsPage() {
         throw new Error(data.error || "コード検証に失敗しました");
       }
 
-      // 成功
-      alert(`✓ 認証成功！\nユーザーID: ${data.userId}\n新規ユーザー: ${data.isNewUser ? "はい" : "いいえ"}`);
-      // 実装後は本来リダイレクトする
-      // window.location.href = data.redirectUrl;
+      // 成功時は自動的にリダイレクト
+      if (data.redirectUrl) {
+        router.push(data.redirectUrl);
+      } else {
+        setStep("success");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "エラーが発生しました");
     } finally {
@@ -177,11 +181,6 @@ export default function DebugSmsPage() {
             <strong>開発環境での動作:</strong>
             <br />
             コンソール（DevTools / Server Log）に検証コードが出力されます
-          </p>
-          <p>
-            <strong>実装予定の本物のログイン:</strong>
-            <br />
-            「Google / Twitter でログイン」（OAuth 2.0）
           </p>
         </div>
       </div>

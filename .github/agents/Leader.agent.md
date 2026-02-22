@@ -46,7 +46,7 @@ Leader が管理する `docs/APP_DETAILED_PLAN.md` の必須セクション:
 - プロジェクト概要（目的、対象、非機能要件）
 - 現状サマリ（完了・進行中・未着手の機能）
 - 機能一覧（優先度と担当タグ）
-- 認証/認可フロー（SMS/Firebase/Twilioの選択理由、フロー図）
+- 認証/認可フロー（SMS/Firebaseの選択理由、フロー図）
 - データモデル（主要テーブルと例）
 - API エンドポイント（主要なリクエスト/レスポンス例）
 - インフラ構成（GCP, Cloud Run, Cloud SQL, Secret Manager など）

@@ -184,7 +184,7 @@ npm start               # Start production server
 
 ## Next Steps
 
-- [ ] Complete SMS authentication flow (integrate Twilio/SendGrid for production SMS)
+- [ ] Complete SMS authentication flow (integrate Firebase for production SMS)
 - [ ] Set up OAuth2 credentials for Twitter login
 - [ ] Configure GCP Cloud SQL for production
 - [ ] Add integration tests
@@ -197,3 +197,9 @@ npm start               # Start production server
 - **Auth**: NextAuth.js v5 with SMS + Twitter OAuth
 - **SMS**: Mocked in development (`ENABLE_SMS_MOCK=true`)
 - **API**: Next.js API routes (`app/api/`)
+
+## ドキュメントとコマンド情報の管理
+
+- `docs/LOCAL_QUICK_START.md` と `scripts/setup-local.ps1` は **Developer エージェント**（リポジトリ管理用自動エージェント）が継続的に管理・更新します。コマンドや起動手順に変更が生じた場合、関連ファイルを更新して小さな PR を作成します。
+- 変更ワークフロー: 編集 → 自動チェック（lint/test）→ PR（説明付き）→ レビュー → マージ。
+- 要望: 追加の自動検証（例: `scripts/*` の変更に対してドキュメント差分を強制する GitHub Action）を導入できます。必要なら実装します。

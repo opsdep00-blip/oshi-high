@@ -21,8 +21,11 @@ model User {
 
   // ファン向け拡張フィールド
   phoneHash     String?   @unique  // SHA-256(phone + salt)
-  phoneSalt     String?             // ユーザーごとのユニークなソルト
+  // DEPRECATION: `phoneSalt` is currently unused by application logic.
+  // Decision: Keep column for now to avoid immediate migration. See docs/DEPRECATIONS.md for migration/backfill plan.
+  phoneSalt     String?             // ユーザーごとのユニークなソルト (deprecated)
   supportingIdolId String?  // 現在支援中の推し (制約: 1つの電話番号 → 1つの推し)
+  phoneVerified  Boolean  @default(false)
   
   // ドット絵パレット (最大4色)
   selectedColors String[] @default([])
@@ -93,6 +96,18 @@ model VerificationToken {
   @@unique([identifier, token])
   @@index([identifier])
 }
+
+// PendingLink: used when OAuth sign-in collides with existing email
+model PendingLink {
+  id                 String   @id @default(cuid())
+  token              String   @unique
+  provider           String
+  providerAccountId  String
+  data               Json
+  createdAt          DateTime @default(now())
+  expiresAt          DateTime
+}
+
 
 // ===== ドメインテーブル =====
 

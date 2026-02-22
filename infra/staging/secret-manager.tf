@@ -55,6 +55,19 @@ resource "google_secret_manager_secret" "firebase_api_key" {
   }
 }
 
+resource "google_secret_manager_secret" "recaptcha_site_key" {
+  secret_id = "staging-recaptcha-site-key"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret" "recaptcha_secret_key" {
+  secret_id = "staging-recaptcha-secret-key"
+  replication {
+    auto {}
+  }
+}
 
 
 # (Add more secrets as needed: DB password, JWT secret, Google OAuth secret, etc.)

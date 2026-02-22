@@ -24,12 +24,14 @@ Codex は OSHI-HIGH プロジェクトのコード実装・品質管理を担う
 ## ワークフロー
 
 1. **実装/レビュー要求受領**: ファイル名・機能・コンテキストを確認。
-2. **対象ファイル読み込み**: 現状分析・依存関係確認。
-3. **DB マイグレーション検出**: スキーマ変更がある場合は backfill 戦略を検討。
-4. **実装・修正**: 小さな単位で実装（関数単位 / コンポーネント単位）。
-5. **自動検査**: TypeScript compile、ESLint、ユニットテスト実行。
-6. **PR 作成**: Conventional Commits + コード品質チェックリスト含む。
-7. **レビュー・フィードバック対応**: CI グリーン → マージ。
+2. **実装計画ドキュメント作成**: `docs/IMPLEMENTATION_STATUS.md` に実装予定内容を記載（変更対象ファイル、実装内容、backfill 戦略など）。
+3. **対象ファイル読み込み**: 現状分析・依存関係確認。
+4. **DB マイグレーション検出**: スキーマ変更がある場合は backfill 戦略を検討。
+5. **実装・修正**: 小さな単位で実装（関数単位 / コンポーネント単位）。
+6. **ドキュメント更新**: `docs/IMPLEMENTATION_STATUS.md` に実装完了内容を更新（完了日時、変更ファイル、テスト結果など）。
+7. **自動検査**: TypeScript compile、ESLint、ユニットテスト実行。
+8. **PR 作成**: Conventional Commits + コード品質チェックリスト含む（実装状況ドキュメント へのリンク必須）。
+9. **レビュー・フィードバック対応**: CI グリーン → マージ。
 
 ## inputs
 
@@ -64,6 +66,7 @@ Codex は OSHI-HIGH プロジェクトのコード実装・品質管理を担う
 - [ ] 本番影響がある場合は Leader 承認済み
 - [ ] PR に差分・テスト方法を明記
 - [ ] **DB スキーマ変更時**: backfill スクリプトまたは migration ファイルを含む（既存データへの対応）
+- [ ] **実装状況を `docs/IMPLEMENTATION_STATUS.md` に記録**: 実装内容、変更ファイル一覧、完了日時、テスト結果
 
 ## tests
 
@@ -95,6 +98,45 @@ DB スキーマ変更や新規カラム追加時は、必ず backfill 戦略を�
 1. `prisma/migrations/` の migration ファイル内に `/* backfill: ... */` コメントを記載
 2. 大規模データ更新の場合は `scripts/backfill-*.ts` スクリプトを別途作成
 3. PR に「既存データへの影響」セクションを必ず含める
+
+## 実装状況ドキュメント（docs/IMPLEMENTATION_STATUS.md）
+
+各実装タスク完了後、`docs/IMPLEMENTATION_STATUS.md` に以下の形式で記録してください。
+
+### テンプレート例
+
+```markdown
+## [タスク名]
+
+**日時**: 2026-02-01
+**ステータス**: ✅ 完了 / 🔄 進行中 / ⏸ ブロック中
+
+### 実装内容
+- 概要（何を実装したか）
+- 主要変更
+
+### 変更ファイル
+- `src/app/api/support/route.ts` - POST /api/support エンドポイント実装
+- `src/lib/transaction.ts` - トランザクション管理ロジック
+- `src/__tests__/api/support.test.ts` - テストスイート
+
+### テスト結果
+- ✅ TypeScript compile: OK
+- ✅ ESLint: OK
+- ✅ Unit tests: 5/5 passed
+- ✅ Integration tests: OK
+
+### Backfill / DB 変更
+- ✅ Prisma migration: `prisma/migrations/20260201_add_support_idempotency.sql`
+- ✅ Backfill script: なし（新規カラムにデフォルト値を適用）
+
+### PR / コミット
+- PR: #123
+- Commits: `feat(support): implement idempotency for support API`
+
+### メモ
+- 特記事項やブロッキング情報（あれば）
+```
 - 依存ライブラリの脆弱性確認（`npm audit` / `pnpm audit`）。
 
 ## usage

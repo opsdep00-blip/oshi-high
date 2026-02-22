@@ -19,12 +19,6 @@ variable "db_user" {
   default = "oshi_user"
 }
 
-variable "db_password" {
-  type        = string
-  description = "DB password (use Terraform variable or secret)"
-  sensitive   = true
-}
-
 variable "service_account_email" {
   type        = string
   description = "Service Account used by Cloud Run (optional; can be created by Terraform)"

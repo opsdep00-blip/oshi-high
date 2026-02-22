@@ -122,6 +122,13 @@ docker-compose up -d
 
 ---
 
+## � デバッグ / セキュリティ注意
+
+**注意**: 開発用のデバッグエンドポイント（例: `/api/debug/*`）は便利ですが、環境変数や内部の情報をログに出力する場合があります。特に `DATABASE_URL` やサービスのシークレットは絶対に公開環境ではログに出さないでください。
+
+- `ENABLE_DB_RESET` や `ENABLE_SMS_MOCK` などのフラグは開発用に `true` にすることがありますが、本番環境では必ず `false` にしてください。
+- 出力されるログがシークレットを含まないか確認してください。
+
 ## 📝 環境変数（.env）
 
 後で Backend/Frontend から接続する際は以下を使用：
@@ -135,7 +142,6 @@ S3_ACCESS_KEY=minioadmin
 S3_SECRET_KEY=minioadmin
 S3_BUCKET=oshi-high-assets
 ```
-
 ---
 
 最終更新：January 25, 2026

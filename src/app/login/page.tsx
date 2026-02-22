@@ -1,249 +1,194 @@
 "use client";
 
-import { useState } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
-
-type Step = "phone" | "code";
+import Link from "next/link";
+import { useState, useEffect } from "react";
+import { RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 
 export default function LoginPage() {
-  const router = useRouter();
-  const [step, setStep] = useState<Step>("phone");
-  const [phone, setPhone] = useState("");
-  const [code, setCode] = useState("");
-  const [sessionInfo, setSessionInfo] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [verificationCode, setVerificationCode] = useState("");
+  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
+  const [step, setStep] = useState<"phone" | "code">("phone");
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [isNewUser, setIsNewUser] = useState(false);
 
-  // ステップ 1: 電話番号送信
-  const handleSendCode = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
+  useEffect(() => {
+    // Initialize RecaptchaVerifier
+    if (!window.recaptchaVerifier) {
+      // Note: constructor signature is (containerOrId, parameters?, app?)
+      window.recaptchaVerifier = new RecaptchaVerifier('recaptcha-container', {
+        'size': 'normal',
+        'callback': () => {
+          // reCAPTCHA solved, allow signInWithPhoneNumber.
+        },
+        'expired-callback': () => {
+          // Response expired. Ask user to solve reCAPTCHA again.
+          setError("reCAPTCHA expired. Please try again.");
+        }
+      }, auth);
+    }
+  }, []);
+
+  const handleSendSms = async () => {
+    setError(null);
     setLoading(true);
-
     try {
-      const response = await fetch("/api/auth/sms/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone }),
-      });
-
-      let data;
-      try {
-        data = await response.json();
-      } catch (parseError) {
-        console.error("Failed to parse response:", parseError);
-        setError(
-          "Invalid response from server. Check browser console and server logs."
-        );
+      const appVerifier = window.recaptchaVerifier;
+      if (!appVerifier) {
+        setError('reCAPTCHA の初期化に失敗しました。ページを再読み込みしてください。');
         setLoading(false);
         return;
       }
-
-      if (!response.ok) {
-        const errorMsg =
-          data.error ||
-          data.details ||
-          `HTTP ${response.status}: Failed to send verification code`;
-        throw new Error(errorMsg);
-      }
-
-      // レスポンスから sessionInfo と isNewUser を取得
-      setSessionInfo(data.sessionInfo || "");
-      setIsNewUser(data.isNewUser);
+      // Ensure phone number is in E.164 format (e.g., +819012345678)
+      const confirmation = await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
+      setConfirmationResult(confirmation);
       setStep("code");
-    } catch (err) {
-      const errorMsg =
-        err instanceof Error ? err.message : "An unknown error occurred";
-      console.error("[Login Error]", errorMsg);
-      setError(errorMsg);
+    } catch (err: any) {
+      console.error("SMS Send Error:", err);
+      setError(err.message || "SMSの送信に失敗しました。");
+      // Reset recaptcha on error so user can try again
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear();
+        window.recaptchaVerifier = undefined;
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // ステップ 2: コード検証 & ログイン
-  const handleVerifyCode = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
+  const handleVerifyCode = async () => {
+    if (!confirmationResult) return;
+    setError(null);
     setLoading(true);
-
     try {
-      // Firebase フロー: sessionInfo + code を送信
-      const response = await fetch("/api/auth/sms/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionInfo, code }),
+      const result = await confirmationResult.confirm(verificationCode);
+      const user = result.user;
+      const idToken = await user.getIdToken();
+
+      // Send ID token to server via NextAuth credentials provider
+      const res = await signIn("credentials", {
+        idToken,
+        callbackUrl: "/account",
+        redirect: false, // handle redirect client-side to satisfy TypeScript
       });
 
-      let data;
-      try {
-        data = await response.json();
-      } catch (parseError) {
-        console.error("Failed to parse response:", parseError);
-        setError(
-          "Invalid response from server. Check browser console and server logs."
-        );
-        setLoading(false);
+      if (res?.ok) {
+        // credentials provider returns a url when successful
+        window.location.href = (res.url as string) || '/account';
         return;
       }
 
-      if (!response.ok) {
-        const errorMsg =
-          data.error ||
-          data.details ||
-          `HTTP ${response.status}: Failed to verify code`;
-        throw new Error(errorMsg);
-      }
-
-      // 検証成功: NextAuth セッション作成のため signIn を呼ぶ
-      // (verify API からの userId を使って NextAuth セッションを確立)
-      const signInResult = await signIn("sms", {
-        phone,
-        code,
-        redirect: false,
-        callbackUrl: "/dashboard",
-      });
-
-      if (signInResult?.ok) {
-        console.log("[Login] Authentication successful, redirecting to dashboard");
-        router.push("/dashboard");
-      } else {
-        throw new Error(signInResult?.error || "Failed to create session");
-      }
-    } catch (err) {
-      const errorMsg =
-        err instanceof Error ? err.message : "An unknown error occurred";
-      console.error("[Verify Error]", errorMsg);
-      setError(errorMsg);
+      setError(res?.error || "認証に失敗しました。");
+    } catch (err: any) {
+      console.error("Verification Error:", err);
+      setError("確認コードが正しくありません。");
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleBackToPhone = () => {
-    setStep("phone");
-    setCode("");
-    setError("");
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
-      <div className="w-full max-w-md">
-        {/* ヘッダー */}
-        <div className="mb-8 text-center">
-          <h1 className="text-4xl font-black text-black drop-shadow-[2px_2px_0px_rgba(0,0,0,0.3)]">
-            OSHI-HIGH
-          </h1>
-          <p className="mt-2 text-sm font-bold text-gray-700">
-            {isNewUser && step === "code" ? "アカウント作成" : "ログイン"}
-          </p>
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
+      <h1 className="text-2xl font-bold mb-4">ログイン</h1>
+
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 w-80">
+          {error}
         </div>
+      )}
 
-        {/* メインカード */}
-        <div className="space-y-6 rounded-lg border-4 border-black bg-white p-8 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-          {/* エラーメッセージ */}
-          {error && (
-            <div className="rounded-lg border-2 border-red-500 bg-red-100 p-4">
-              <p className="text-sm font-bold text-red-700">{error}</p>
-            </div>
-          )}
+      {/* Social Login Buttons */}
+      <button
+        onClick={async () => {
+          if (process.env.NEXT_PUBLIC_ENABLE_OAUTH_MOCK === 'true') {
+            await signIn('mock', { provider: 'google', callbackUrl: '/account' });
+          } else {
+            await signIn('google', { callbackUrl: '/account' });
+          }
+        }}
+        className="bg-blue-500 text-white px-4 py-2 rounded mb-2"
+      >
+        Googleでログイン
+      </button>
+      <button
+        onClick={async () => {
+          if (process.env.NEXT_PUBLIC_ENABLE_OAUTH_MOCK === 'true') {
+            await signIn('mock', { provider: 'twitter', callbackUrl: '/account' });
+          } else {
+            await signIn('twitter', { callbackUrl: '/account' });
+          }
+        }}
+        className="bg-blue-400 text-white px-4 py-2 rounded"
+      >
+        Twitterでログイン
+      </button>
 
-          {/* ステップ 1: 電話番号入力 */}
-          {step === "phone" && (
-            <form onSubmit={handleSendCode} className="space-y-4">
-              <div>
-                <label className="mb-2 block text-sm font-bold text-black">
-                  電話番号
-                </label>
-                <input
-                  type="tel"
-                  placeholder="09012345678"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  disabled={loading}
-                  className="w-full border-4 border-black bg-white p-3 font-bold text-black placeholder-gray-400 outline-none focus:shadow-[inset_0px_0px_0px_2px_rgba(0,0,0,0.5)] disabled:opacity-50"
-                />
-                <p className="mt-1 text-xs font-bold text-gray-600">
-                  日本の携帯電話番号を入力してください
-                </p>
-              </div>
+      <div className="my-6 border-t border-gray-300 w-64"></div>
 
-              <button
-                type="submit"
-                disabled={loading || !phone}
-                className="w-full border-4 border-black bg-blue-400 py-3 font-black text-black transition-all hover:bg-blue-500 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] active:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] disabled:opacity-50"
-              >
-                {loading ? "送信中..." : "確認コードを送信"}
-              </button>
-            </form>
-          )}
-
-          {/* ステップ 2: コード入力 */}
-          {step === "code" && (
-            <form onSubmit={handleVerifyCode} className="space-y-4">
-              <div>
-                <label className="mb-2 block text-sm font-bold text-black">
-                  確認コード
-                </label>
-                <p className="mb-3 text-xs font-bold text-gray-600">
-                  SMSで受け取った6桁のコードを入力してください
-                </p>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={6}
-                  placeholder="123456"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-                  disabled={loading}
-                  className="w-full border-4 border-black bg-white p-3 font-black text-center text-2xl tracking-widest text-black outline-none focus:shadow-[inset_0px_0px_0px_2px_rgba(0,0,0,0.5)] disabled:opacity-50"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading || code.length !== 6}
-                className="w-full border-4 border-black bg-green-400 py-3 font-black text-black transition-all hover:bg-green-500 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] active:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] disabled:opacity-50"
-              >
-                {loading ? "確認中..." : "ログイン"}
-              </button>
-
-              <button
-                type="button"
-                onClick={handleBackToPhone}
-                disabled={loading}
-                className="w-full border-4 border-gray-400 bg-gray-200 py-2 font-bold text-black transition-all hover:border-black hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)] disabled:opacity-50"
-              >
-                戻る
-              </button>
-            </form>
-          )}
-
-          {/* 進捗インジケータ */}
-          <div className="flex items-center justify-center gap-2 border-t-4 border-black pt-6">
-            <div
-              className={`h-3 w-3 border-2 border-black ${
-                step === "phone" ? "bg-black" : "bg-white"
-              }`}
+      {/* SMS Login Section */}
+      <div className="w-80 bg-white p-6 rounded shadow-md">
+        <h2 className="text-lg font-semibold mb-4 text-center">電話番号でログイン</h2>
+        
+        {step === "phone" ? (
+          <>
+            <input
+              type="tel"
+              placeholder="+819012345678"
+              value={phoneNumber}
+              onChange={(e) => setPhoneNumber(e.target.value)}
+              className="w-full border p-2 rounded mb-4"
             />
-            <div className="h-1 w-8 border-t-2 border-black" />
-            <div
-              className={`h-3 w-3 border-2 border-black ${
-                step === "code" ? "bg-black" : "bg-white"
-              }`}
+            <div id="recaptcha-container" className="mb-4 flex justify-center"></div>
+            <button
+              onClick={handleSendSms}
+              disabled={loading || !phoneNumber}
+              className="w-full bg-green-500 text-white py-2 rounded disabled:opacity-50"
+            >
+              {loading ? "送信中..." : "SMSを送信"}
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-gray-600 mb-2">
+              {phoneNumber} に送信されたコードを入力してください
+            </p>
+            <input
+              type="text"
+              placeholder="123456"
+              value={verificationCode}
+              onChange={(e) => setVerificationCode(e.target.value)}
+              className="w-full border p-2 rounded mb-4 text-center tracking-widest"
             />
-          </div>
-        </div>
-
-        {/* フッター情報 */}
-        <div className="mt-6 rounded-lg border-2 border-gray-300 bg-gray-50 p-4 text-center">
-          <p className="text-xs font-bold text-gray-600">
-            © 2026 OSHI-HIGH. All rights reserved.
-          </p>
-        </div>
+            <button
+              onClick={handleVerifyCode}
+              disabled={loading || !verificationCode}
+              className="w-full bg-green-600 text-white py-2 rounded disabled:opacity-50"
+            >
+              {loading ? "認証中..." : "認証する"}
+            </button>
+            <button
+              onClick={() => setStep("phone")}
+              className="w-full mt-2 text-sm text-gray-500 hover:underline"
+            >
+              電話番号を変更
+            </button>
+          </>
+        )}
       </div>
-    </main>
+
+      <Link href="/" className="mt-6 text-sm text-gray-600 hover:underline">
+        ← ホームに戻る
+      </Link>
+    </div>
   );
+}
+
+// Add types for window object to support reCAPTCHA
+declare global {
+  interface Window {
+    recaptchaVerifier?: RecaptchaVerifier;
+  }
 }

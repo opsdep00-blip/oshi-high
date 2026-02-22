@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import * as logger from "@/lib/logger";
+import { auth } from "@/auth";
 
 interface RouteParams {
   params: Promise<{
@@ -50,7 +52,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       data: idol,
     });
   } catch (error) {
-    console.error("GET /api/idols/:id error:", error);
+    logger.error("GET /api/idols/:id error:", { error });
     return NextResponse.json(
       { success: false, error: "Failed to fetch idol" },
       { status: 500 }
@@ -68,7 +70,24 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const body = await request.json();
     const { description, snsHandle, profileImage } = body;
 
-    // TODO: 認証チェック & 権限確認 (claimedBy == session.user.id)
+    const session = await auth();
+    if (!session || !session.user?.id) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    }
+
+    const currentUser = await prisma.user.findUnique({ where: { id: session.user.id } });
+    if (!currentUser) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const targetIdol = await prisma.idol.findUnique({ where: { id } });
+    if (!targetIdol) {
+      return NextResponse.json({ error: "Idol not found" }, { status: 404 });
+    }
+
+    if (targetIdol.claimedBy !== session.user.id && currentUser.role !== "ADMIN") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     const idol = await prisma.idol.update({
       where: { id },
@@ -84,7 +103,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       data: idol,
     });
   } catch (error) {
-    console.error("PATCH /api/idols/:id error:", error);
+    logger.error("PATCH /api/idols/:id error:", { error });
     return NextResponse.json(
       { success: false, error: "Failed to update idol" },
       { status: 500 }

@@ -15,7 +15,7 @@
 - 実装済み:
   - Pixel-art ベースの `app/login/page.tsx`（2ステップ SMS）
   - Docker/Prisma/DB 初期セットアップ
-  - SMS mock ライブラリ `src/lib/sms.ts`（モック & Twilio/Firebase のテンプレ実装あり）
+  - SMS mock ライブラリ `src/lib/sms.ts`（モック & Firebase のテンプレ実装あり）
   - NextAuth CredentialsProvider を用いた SMS 認証基盤（修正中）
 - 進行中:
   - Firebase Identity Platform を用いた SMS 送信フローに切替（`send` & `verify` API の修正済み）
@@ -26,7 +26,7 @@
   - 電話番号ポリシー: **1 phone → 1 user**（電話番号切替はクールダウン制）
   - 電話番号切替クールダウン: **72 時間（3日）**
 - 未着手/要検討:
-  - Twilio を使った自前OTP運用のコスト見積と比較（必要なら行う）
+  - サードパーティSMSプロバイダのコスト比較（必要なら行う）
 
 ---
 
@@ -57,7 +57,7 @@
   - ユーザーにエラーを表示し、ユーザー操作で再送を促す
   - 自動リトライは行わない
 - フォールバック:
-  - Firebase → Twilio の切替は **手動のみ**（自動フェイルオーバはしない）
+  - フェイルオーバーは手動運用とし、自動フェイルオーバは行わない（現在の運用は Firebase が唯一のサポート対象）
 
 ---
 
@@ -113,7 +113,7 @@
 - `src/app/login/page.tsx` — 送信/検証 UI（sessionInfo の保持、sessionInfo+code で検証）
 - `src/app/api/auth/sms/send/route.ts` — send API（Firebase 分岐: Firebase は sessionInfo を返す）
 - `src/app/api/auth/sms/verify/route.ts` — verify API（Firebase の signInWithPhoneNumber 呼び出し → phoneNumber を取得）
-- `src/lib/sms.ts` — SMS 送信ロジック（mock / firebase / twilio の抽象）
+- `src/lib/sms.ts` — SMS 送信ロジック（mock / firebase の抽象）
 - `src/lib/firebaseAdmin.ts` — Firebase Admin 初期化（env から鍵読み込み）
 - `src/auth.ts` — NextAuth 設定（CredentialsProvider、JWT）
 
@@ -122,7 +122,7 @@
 ## 10. API 仕様の要点（更新）
 - POST `/api/auth/sms/send` — body: { phone }
   - Firebase モード: Returns `{ success, sessionInfo, isNewUser, expiresIn }` (sessionInfo must be stored client-side until verification)
-  - Twilio モード: Returns `{ success, phoneHash, isNewUser, expiresIn }`
+  - SMS provider: Firebase is the supported provider (returns `{ success, sessionInfo, isNewUser, expiresIn }`).
 - POST `/api/auth/sms/verify` — body: { sessionInfo, code } (Firebase)
   - サーバは Firebase の `signInWithPhoneNumber` を呼び出して `phoneNumber` を受け取り、`phoneHash` を算出して User 作成/ログインを実施
 
@@ -130,7 +130,7 @@
 
 ## 11. DB スキーマ（要約・注記）
 - `User` (id, phoneHash UNIQUE, role, ...) — phoneHash はインデックス／ユニーク
-- `VerificationToken` は Firebase フローでは不要だが、Twilioモード運用時は利用可能
+- `VerificationToken` は Firebase フローでは不要です（モック/レガシー用に残す場合あり）
 
 ---
 
@@ -173,7 +173,7 @@
 ## 16. TODO & 進捗ログ (leader-managed)
 - [2026-01-18] phoneHash salt-less 化を実施（send と auth の検索ロジックを修正） — 実装済
 - [2026-01-18] `src/lib/firebaseAdmin.ts` を追加、Firebase 初期化処理を追加 — 実装済
-- [2026-01-18] `src/lib/sms.ts` を修正し Firebase / Twilio モードを実装 — 実装済
+- [2026-01-18] `src/lib/sms.ts` を修正し Firebase モードを実装 — 実装済
 - [2026-01-24] **決定**: `SMS_PROVIDER=firebase` を採用、JWT 継続、1phone→1user、電話切替クールダウン72時間 — 決定済
 - [2026-01-24] TODO: **Provision STAGING Firebase project** — 担当: @team
 - [2026-01-24] Step1: コードから phoneSalt 参照を完全に削除 → 担当: @teamlead (タスク登録済)

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import crypto from "crypto";
-import { getFirebaseAccessToken } from "@/lib/firebaseAdmin";
+import logger from "@/lib/logger";
+import { phoneToHash } from "@/lib/phoneHash";
 
 /**
  * [DEBUG] SMS 認証コード検証 API
@@ -25,17 +24,23 @@ import { getFirebaseAccessToken } from "@/lib/firebaseAdmin";
  * }
  */
 export async function POST(request: NextRequest) {
+  logger.debug("[Debug SMS Verify] Request received");
   try {
-    let sessionInfo: string;
+    let sessionInfo: string | undefined;
     let code: string;
+    let phone: string | undefined;
 
     // JSON パース
+    let mode: "signin" | "signup" | undefined;
     try {
       const body = await request.json();
       sessionInfo = body.sessionInfo;
       code = body.code;
+      phone = body.phone;
+      mode = body?.mode;
+      logger.debug("[Debug SMS Verify] Parsed body", { sessionInfo: !!sessionInfo, code: !!code, phone: !!phone, mode });
     } catch (parseError) {
-      console.error("[Debug SMS Verify] JSON parse error:", parseError);
+      logger.error("[Debug SMS Verify] JSON parse error", { error: parseError });
       return NextResponse.json(
         {
           error: "Invalid request body: expected JSON with 'sessionInfo' and 'code'",
@@ -45,11 +50,33 @@ export async function POST(request: NextRequest) {
     }
 
     // 入力値の検証
-    if (!sessionInfo || !code) {
+    const isMock = process.env.ENABLE_SMS_MOCK === "true";
+    if (!isMock && !sessionInfo) {
       return NextResponse.json(
-        { error: "sessionInfo and verification code are required" },
+        { error: "sessionInfo is required when not in mock mode" },
         { status: 400 }
       );
+    }
+    if (!code) {
+      return NextResponse.json(
+        { error: "verification code is required" },
+        { status: 400 }
+      );
+    }
+
+    // phoneHash の生成（モックモード用）
+    let phoneHash: string | undefined;
+    if (isMock && phone) {
+      try {
+        phoneHash = phoneToHash(phone);
+        logger.debug("[Debug SMS Verify] Generated phoneHash", { phoneHash });
+      } catch (hashError) {
+        logger.error("[Debug SMS Verify] Hashing error", { error: hashError });
+        return NextResponse.json(
+          { error: "Failed to hash phone number" },
+          { status: 500 }
+        );
+      }
     }
 
     if (code.length !== 6 || !/^\d{6}$/.test(code)) {
@@ -59,112 +86,43 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Firebase の OTP 検証を実施
-    let phoneNumber: string | undefined;
+    // Delegate to shared verifier: mock mode uses phone, production uses sessionInfo
     try {
-      const accessToken = await getFirebaseAccessToken();
-      const response = await fetch(
-        "https://identitytoolkit.googleapis.com/v2/accounts:signInWithPhoneNumber",
+      const modeArg: import("@/lib/smsAuth").VerifyMode = mode === "signin" ? "signin" : "signup";
+      const verifyArg = isMock ? { phone } : { sessionInfo };
+
+      // If user is signed in, prefer linking the verified phone to current user
+      let currentUserId: string | undefined;
+      try {
+        const { auth } = await import("@/auth");
+        const session = await auth();
+        currentUserId = session?.user?.id as string | undefined;
+      } catch {
+        // ignore - if auth is unavailable, fallback to normal behaviour
+      }
+
+      const { user, isNewUser } = await (await import("@/lib/smsAuth")).verifySmsCode(verifyArg, code, modeArg, currentUserId);
+
+      return NextResponse.json(
         {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ sessionInfo, code }),
-        }
+          success: true,
+          userId: user.id,
+          isNewUser,
+          message: isNewUser ? "Account created successfully" : "Logged in successfully",
+          redirectUrl: `/debug/sms/success?userId=${user.id}&isNewUser=${isNewUser}`,
+        },
+        { status: 200 }
       );
-
-      if (!response.ok) {
-        const text = await response.text();
-        console.error("[Debug SMS Verify] Firebase verify error", {
-          status: response.status,
-          statusText: response.statusText,
-          responseBody: text?.slice(0, 500),
-        });
-        return NextResponse.json(
-          { error: "Verification failed" },
-          { status: 400 }
-        );
-      }
-
-      const result = await response.json();
-      phoneNumber = result?.phoneNumber;
-    } catch (firebaseError) {
-      console.error("[Debug SMS Verify] Firebase verification exception", firebaseError);
-      return NextResponse.json(
-        { error: "Verification failed" },
-        { status: 400 }
-      );
+    } catch (e) {
+      const err = e as Error & { status?: number };
+      const status = err.status ?? 500;
+      logger.error("[Debug SMS Verify] verifySmsCode error", { error: err });
+      return NextResponse.json({ error: err.message }, { status });
     }
 
-    if (!phoneNumber) {
-      return NextResponse.json(
-        { error: "Phone number not returned by provider" },
-        { status: 400 }
-      );
-    }
 
-    const phoneHash = crypto.createHash("sha256").update(phoneNumber).digest("hex");
-
-    // ステップ 2: 既存ユーザーをチェック
-    let user;
-    let isNewUser = false;
-
-    try {
-      user = await prisma.user.findUnique({
-        where: { phoneHash },
-        include: { accounts: true },
-      });
-
-      isNewUser = !user;
-
-      if (!user) {
-        // 新規ユーザー: User と Account を作成
-        user = await prisma.user.create({
-          data: {
-            phoneHash,
-            // phoneSalt は既存ユーザーのみ。新規ユーザーの場合は別途設定
-            role: "FAN",
-            accounts: {
-              create: {
-                type: "credentials",
-                provider: "sms",
-                providerAccountId: phoneHash,
-              },
-            },
-          },
-          include: { accounts: true },
-        });
-
-        console.log(`[Debug SMS Auth] New user created: ${user.id}`);
-      } else {
-        console.log(`[Debug SMS Auth] Existing user authenticated: ${user.id}`);
-      }
-    } catch (userError) {
-      console.error("[Debug SMS Verify] User creation/lookup error:", userError);
-      return NextResponse.json(
-        { error: "Failed to create or retrieve user" },
-        { status: 500 }
-      );
-    }
-
-    // Firebase 側で検証済みなので VerificationToken の削除は不要
-
-    return NextResponse.json(
-      {
-        success: true,
-        userId: user.id,
-        isNewUser,
-        message: isNewUser
-          ? "Account created successfully"
-          : "Logged in successfully",
-        redirectUrl: "/dashboard",
-      },
-      { status: 200 }
-    );
   } catch (error) {
-    console.error("[Debug SMS Verify] Unexpected error:", error);
+    logger.error("[Debug SMS Verify] Unexpected error", { error });
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
       {

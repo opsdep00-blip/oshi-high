@@ -1,3 +1,8 @@
+resource "random_password" "db_password" {
+  length  = 16
+  special = true
+}
+
 resource "google_sql_database_instance" "postgres" {
   name             = var.db_instance_name
   database_version = "POSTGRES_15"
@@ -21,14 +26,14 @@ resource "google_sql_database" "oshi_db" {
 resource "google_sql_user" "oshi_user" {
   name     = var.db_user
   instance = google_sql_database_instance.postgres.name
-  password = var.db_password
+  password = random_password.db_password.result
 }
 
 # PostgreSQLのデフォルト管理者ユーザー(postgres)のパスワード設定
 resource "google_sql_user" "postgres" {
   name     = "postgres"
   instance = google_sql_database_instance.postgres.name
-  password = var.db_password
+  password = random_password.db_password.result
 }
 
 output "instance_connection_name" {

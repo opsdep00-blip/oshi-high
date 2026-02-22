@@ -28,6 +28,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       GoogleProvider({
         clientId: process.env.GOOGLE_CLIENT_ID || "",
         clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+        // Force account chooser so users can select a different Google account after sign out
+        authorization: {
+          params: {
+            prompt: 'select_account',
+          },
+        },
       }),
 
       TwitterProvider({

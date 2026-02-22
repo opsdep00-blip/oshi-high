@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
+import * as logger from "@/lib/logger";
 
 /**
  * GET /api/idols
@@ -12,9 +14,9 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const claimedFilter = searchParams.get("claimed");
 
-    const where: any = {};
+    const where: Prisma.IdolWhereInput = {};
     if (claimedFilter === "true") {
-      where.claimedBy = { not: null };
+      where.claimedBy = { not: null } as Prisma.StringNullableFilter;
     } else if (claimedFilter === "false") {
       where.claimedBy = null;
     }
@@ -37,7 +39,7 @@ export async function GET(request: NextRequest) {
       data: idols,
     });
   } catch (error) {
-    console.error("GET /api/idols error:", error);
+    logger.error("GET /api/idols error:", { error });
     return NextResponse.json(
       { success: false, error: "Failed to fetch idols" },
       { status: 500 }
@@ -79,7 +81,7 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    console.error("POST /api/idols error:", error);
+    logger.error("POST /api/idols error:", { error });
     return NextResponse.json(
       { success: false, error: "Failed to create idol" },
       { status: 500 }

@@ -9,7 +9,7 @@
  * In development mode (ENABLE_SMS_MOCK=true), logs to console instead of sending.
  * In production, uses Firebase Admin SDK, Twilio, or alternative SMS provider.
  */
-import { getFirebaseAccessToken } from "@/lib/firebaseAdmin";
+import * as logger from "@/lib/logger"; 
 
 type SmsSendResult = {
   sessionInfo?: string;
@@ -38,16 +38,14 @@ export async function sendVerificationCode(params: {
   const { phoneHash, phone, code } = params;
 
   if (process.env.ENABLE_SMS_MOCK === "true") {
-    console.log(
-      `【開発用】送信先ハッシュ: ${phoneHash}, 認証コード: ${code}`
-    );
+    (await import("@/lib/logger")).info(`【開発用】送信先ハッシュ: ${phoneHash}, 認証コード: ${code}`);
     return Promise.resolve({});
   }
 
-  const provider = (process.env.SMS_PROVIDER || "twilio").toLowerCase();
+  const provider = (process.env.SMS_PROVIDER || "firebase").toLowerCase();
 
   if (!phone) {
-    console.error("[SMS][missing-phone] phone is required when mock is disabled", {
+    logger.error("[SMS][missing-phone] phone is required when mock is disabled", {
       provider,
       phoneHash,
     });
@@ -56,14 +54,13 @@ export async function sendVerificationCode(params: {
 
   try {
     if (provider === "firebase") {
-      return await sendViaFirebase(phone, code);
-    } else {
-      await sendViaTwilio(phone, code);
-      return {};
+      // Firebase Auth の仕様上、サーバーサイドからのSMS送信はできません。
+      throw new Error("Firebase SMS sending cannot be done from server-side. Use Firebase JS SDK on the client-side.");
     }
+    throw new Error(`Unsupported SMS_PROVIDER: ${provider}`);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    console.error(`[SMS][${provider}] send failed`, {
+    logger.error(`[SMS][${provider}] send failed`, {
       provider,
       message,
     });
@@ -160,92 +157,3 @@ export async function sendVerificationCode(params: {
  * 2. Store mapping in Redis or cache temporarily
  * 3. Modify API to pass both hash and plaintext (less secure)
  */
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Missing environment variable: ${name}`);
-  }
-  return value;
-}
-
-async function sendViaTwilio(phone: string, code: string): Promise<void> {
-  const accountSid = requireEnv("TWILIO_ACCOUNT_SID");
-  const authToken = requireEnv("TWILIO_AUTH_TOKEN");
-  const fromNumber = process.env.TWILIO_FROM_NUMBER;
-  const messagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID;
-
-  if (!fromNumber && !messagingServiceSid) {
-    throw new Error("TWILIO_FROM_NUMBER or TWILIO_MESSAGING_SERVICE_SID is required");
-  }
-
-  const body = new URLSearchParams();
-  body.set("To", phone);
-  body.set("Body", `OSHI-HIGH: 認証コード ${code} (10分以内に入力)`);
-  if (messagingServiceSid) {
-    body.set("MessagingServiceSid", messagingServiceSid);
-  } else if (fromNumber) {
-    body.set("From", fromNumber);
-  }
-
-  const response = await fetch(
-    `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString("base64")}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body,
-    }
-  );
-
-  if (!response.ok) {
-    const text = await response.text();
-    console.error("[SMS][twilio] HTTP error", {
-      status: response.status,
-      statusText: response.statusText,
-      responseBody: text?.slice(0, 500),
-    });
-    throw new Error("Twilio SMS send failed");
-  }
-}
-
-async function sendViaFirebase(phone: string, code: string): Promise<SmsSendResult> {
-  const accessToken = await getFirebaseAccessToken();
-
-  const response = await fetch(
-    "https://identitytoolkit.googleapis.com/v2/accounts:sendVerificationCode",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        phoneNumber: phone,
-      }),
-    }
-  );
-
-  if (!response.ok) {
-    const text = await response.text();
-    console.error("[SMS][firebase] HTTP error", {
-      status: response.status,
-      statusText: response.statusText,
-      responseBody: text?.slice(0, 500),
-    });
-    throw new Error("Firebase SMS send failed");
-  }
-
-  const result = await response.json();
-  console.log("[SMS][firebase] sendVerificationCode success", {
-    phone,
-    sessionInfo: result?.sessionInfo ? "received" : "missing",
-    // Firebase 生成 OTP を利用するため、アプリ側コードは参考ログのみ
-    appCodeMasked: `${code.slice(0, 2)}****`,
-  });
-
-  return {
-    sessionInfo: typeof result?.sessionInfo === "string" ? result.sessionInfo : undefined,
-  };
-}

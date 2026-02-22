@@ -110,6 +110,26 @@ resource "google_cloud_run_service" "oshi_service" {
             }
           }
         }
+
+        # reCAPTCHA Secrets
+        env {
+          name = "RECAPTCHA_SITE_KEY"
+          value_from {
+            secret_key_ref {
+              name = google_secret_manager_secret.recaptcha_site_key.secret_id
+              key  = "latest"
+            }
+          }
+        }
+        env {
+          name = "RECAPTCHA_SECRET_KEY"
+          value_from {
+            secret_key_ref {
+              name = google_secret_manager_secret.recaptcha_secret_key.secret_id
+              key  = "latest"
+            }
+          }
+        }
       }
       service_account_name = google_service_account.cloud_run_sa.email
     }

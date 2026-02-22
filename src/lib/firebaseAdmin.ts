@@ -5,6 +5,7 @@
  * - Reuses existing app instance to avoid duplicates
  */
 import { App, cert, getApps, initializeApp } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -40,13 +41,18 @@ export function getFirebaseAdminApp(): App {
 
 export async function getFirebaseAccessToken(): Promise<string> {
   const app = getFirebaseAdminApp();
-  const credential: any = app.options.credential;
+  const credential = app.options.credential as { getAccessToken?: () => Promise<{ access_token?: string }> } | undefined;
 
   if (!credential || typeof credential.getAccessToken !== "function") {
     throw new Error("Firebase credential does not support access tokens");
   }
 
-  const { access_token: accessToken } = await credential.getAccessToken();
+  const tokenResp = await credential.getAccessToken();
+  const accessToken = tokenResp?.access_token;
   if (!accessToken) throw new Error("Failed to obtain Firebase access token");
   return accessToken;
+}
+
+export function getFirebaseAuth() {
+  return getAuth(getFirebaseAdminApp());
 }

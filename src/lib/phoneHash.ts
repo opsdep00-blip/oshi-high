@@ -1,43 +1,41 @@
 import crypto from "crypto";
+import * as logger from "./logger";
 
 /**
- * 電話番号をソルト付きでハッシュ化する関数
- * @param phone - 平文の電話番号
- * @param salt - ユーザーごとのユニークなソルト（未指定の場合は新規生成）
- * @returns { hash: string, salt: string } ハッシュ値とソルト
- *
- * ⚠️ 重要: 生の電話番号はDBに保存しないこと！
+ * 電話番号の正規化
+ * - ハイフン・スペースを削除
+ * - 日本国内表記 (090...) は国際表記(+81...) に変換
+ * - E.164 に近い形式を返す
  */
-export function hashPhoneNumber(
-  phone: string,
-  salt?: string
-): { hash: string; salt: string } {
-  // ソルトが未指定の場合は、ユーザーごとにユニークなソルトを生成
-  const finalSalt = salt || crypto.randomBytes(16).toString("hex");
-
-  // SHA-256 でハッシュ化（phone + salt）
-  const hash = crypto
-    .createHash("sha256")
-    .update(phone + finalSalt)
-    .digest("hex");
-
-  return { hash, salt: finalSalt };
+export function normalizePhone(phone: string): string {
+  const digits = phone.replace(/[^\d+]/g, "");
+  if (digits.startsWith("+")) return digits;
+  if (digits.startsWith("0")) {
+    // 0xxxx -> +81xxxx
+    return "+81" + digits.slice(1);
+  }
+  return digits;
 }
 
 /**
- * 電話番号とハッシュの検証（ログイン時の照合）
- * @param phone - ユーザーが入力した電話番号
- * @param storedHash - DBに保存されたハッシュ値
- * @param storedSalt - DBに保存されたソルト
- * @returns 一致しているかどうか
+ * HMAC-SHA256 を使って決定的に phoneHash を生成する
+ * - PHONE_HASH_SECRET が必須
+ * - 検索可能（決定的）かつ secret による保護あり
  */
-export function verifyPhoneNumber(
-  phone: string,
-  storedHash: string,
-  storedSalt: string
-): boolean {
-  const { hash } = hashPhoneNumber(phone, storedSalt);
-  return hash === storedHash;
+export function phoneToHash(phone: string): string {
+  let secret = process.env.PHONE_HASH_SECRET;
+  if (!secret) {
+    // 開発環境向けのフェールバック: ENABLE_SMS_MOCK=true のときはデバッグ用シークレットを使う
+    if (process.env.ENABLE_SMS_MOCK === "true") {
+      secret = "debug-phone-hash-secret";
+      logger.warn("[phoneToHash] PHONE_HASH_SECRET missing — using debug fallback (ENABLE_SMS_MOCK=true). Set PHONE_HASH_SECRET for production.");
+    } else {
+      throw new Error("Missing PHONE_HASH_SECRET environment variable");
+    }
+  }
+
+  const normalized = normalizePhone(phone);
+  return crypto.createHmac("sha256", secret).update(normalized).digest("hex");
 }
 
 /**
@@ -51,14 +49,13 @@ export function generateVerificationCode(): string {
 /**
  * SMS コード有効期限（分）
  */
-export const SMS_CODE_EXPIRY_MINUTES = 10;
+export const SMS_CODE_EXPIRY_MINUTES = 5;
 
 /**
  * SMS 認証時の電話番号処理フロー例
  */
 export async function processSmsAuthentication(
-  phone: string,
-  verificationCode: string
+  phone: string
 ) {
   // ステップ 1: SMS コードを検証（外部サービス呼び出し）
   // const isValidCode = await verifySmsCode(phone, verificationCode);
@@ -67,13 +64,11 @@ export async function processSmsAuthentication(
   // }
 
   // ステップ 2: 電話番号をハッシュ化
-  const { hash, salt } = hashPhoneNumber(phone);
+  const hash = phoneToHash(phone);
 
-  // ステップ 3: DB に保存する際は hash と salt のみ
+  // ステップ 3: DB に保存する際は hash のみ
   // 生の電話番号は絶対に保存しない！
   return {
     phoneHash: hash,
-    phoneSalt: salt,
-    // ⚠️ ここに phone を返してはいけない！
   };
 }
