@@ -62,11 +62,21 @@ resource "google_secret_manager_secret" "recaptcha_site_key" {
   }
 }
 
+resource "google_secret_manager_secret_version" "recaptcha_site_key" {
+  secret      = google_secret_manager_secret.recaptcha_site_key.id
+  secret_data = var.recaptcha_site_key
+}
+
 resource "google_secret_manager_secret" "recaptcha_secret_key" {
   secret_id = "staging-recaptcha-secret-key"
   replication {
     auto {}
   }
+}
+
+resource "google_secret_manager_secret_version" "recaptcha_secret_key" {
+  secret      = google_secret_manager_secret.recaptcha_secret_key.id
+  secret_data = var.recaptcha_secret_key
 }
 
 

@@ -30,3 +30,15 @@ variable "db_password" {
   description = "Password for the database user; passed via env var from CI or terraform.tfvars"
   sensitive   = true
 }
+
+variable "recaptcha_site_key" {
+  type        = string
+  description = "reCAPTCHA v2 site key (staging)"
+  sensitive   = true
+}
+
+variable "recaptcha_secret_key" {
+  type        = string
+  description = "reCAPTCHA v2 secret key (staging)"
+  sensitive   = true
+}
