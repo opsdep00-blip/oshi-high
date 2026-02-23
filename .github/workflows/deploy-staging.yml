@@ -107,6 +107,8 @@ jobs:
         env:
           GOOGLE_CREDENTIALS: ${{ secrets.GCP_SA_KEY }}
           TF_VAR_db_password: ${{ secrets.STAGING_DB_PASSWORD }}
+          TF_VAR_recaptcha_site_key: ${{ secrets.STAGING_RECAPTCHA_SITE_KEY }}
+          TF_VAR_recaptcha_secret_key: ${{ secrets.STAGING_RECAPTCHA_SECRET_KEY }}
 
       - name: Configure Docker
         run: gcloud auth configure-docker
